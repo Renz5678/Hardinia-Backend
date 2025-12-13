@@ -14,7 +14,7 @@ COPY --from=build /app/target/*.jar app.jar
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring:spring
 
-EXPOSE 8080
+EXPOSE 10000
 
 # JVM optimization flags
 ENTRYPOINT ["java", \
