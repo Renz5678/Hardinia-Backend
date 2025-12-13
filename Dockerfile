@@ -17,8 +17,10 @@ USER spring:spring
 EXPOSE 10000
 
 # JVM optimization flags
-ENTRYPOINT ["java", \
-    "-XX:+UseContainerSupport", \
-    "-XX:MaxRAMPercentage=75.0", \
-    "-Djava.security.egd=file:/dev/./urandom", \
-    "-jar", "app.jar"]
+ENTRYPOINT sh -c 'java \
+  -XX:+UseContainerSupport \
+  -XX:MaxRAMPercentage=75.0 \
+  -Djava.security.egd=file:/dev/./urandom \
+  -Dserver.port=$PORT \
+  -Dserver.address=0.0.0.0 \
+  -jar app.jar'
