@@ -28,4 +28,6 @@ jobs:
         with:
           context: ./BackEnd
           push: true
-          tags: renzz12345/flower-backend:latest
+          tags: |
+            renzz12345/flower-backend:latest
+            renzz12345/flower-backend:${{ github.sha }}
