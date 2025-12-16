@@ -91,7 +91,7 @@ public class FlowerRepository {
     }
 
     private Flower insert(Flower flower) {
-        String sql = "INSERT INTO flowerdetails (flower_name, species, color, planting_date) VALUES(?, ?, ?, ?)";
+        String sql = "INSERT INTO flowerdetails (flower_name, species, color, planting_date, grid_position) VALUES(?, ?, ?, ?, ?)";
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
         jdbc.update(connection -> {
@@ -100,10 +100,10 @@ public class FlowerRepository {
             ps.setString(2, flower.getSpecies());
             ps.setString(3, flower.getColor() != null ? flower.getColor().getColorName() : null);
             ps.setTimestamp(4, flower.getPlantingDate() != null ? Timestamp.valueOf(flower.getPlantingDate()) : null);
+            ps.setInt(5, flower.getGridPosition());
             return ps;
         }, keyHolder);
 
-        // Extract flower_id from the keys map
         Long generatedId = (Long) Objects.requireNonNull(keyHolder.getKeys()).get("flower_id");
 
         return new Flower(
@@ -111,7 +111,8 @@ public class FlowerRepository {
                 flower.getFlowerName(),
                 flower.getSpecies(),
                 flower.getColor(),
-                flower.getPlantingDate()
+                flower.getPlantingDate(),
+                flower.getGridPosition()
         );
     }
 
@@ -131,6 +132,7 @@ public class FlowerRepository {
             flower.setFlower_id(rs.getLong("flower_id"));
             flower.setFlowerName(rs.getString("flower_name"));
             flower.setSpecies(rs.getString("species"));
+            flower.setGridPosition(rs.getInt("grid_position")); // Add this line
 
             String colorStr = rs.getString("color");
             flower.setColor(colorStr != null ? FlowerColor.valueOf(colorStr.toUpperCase()) : null);

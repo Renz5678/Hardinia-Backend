@@ -33,4 +33,7 @@ public class Flower {
 
     @Column(name="planting_date")
     private LocalDateTime plantingDate;
+
+    @Column(name="grid_position")
+    private Integer gridPosition;
 }
