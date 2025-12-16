@@ -27,6 +27,7 @@ public class FlowerService {
         flower.setSpecies(dto.species());
         flower.setColor(dto.color());
         flower.setPlantingDate(dto.plantingDate());
+        flower.setGridPosition(dto.gridPosition()); // Add this line
 
         Flower saved = flowerRepository.save(flower);
 
@@ -46,6 +47,7 @@ public class FlowerService {
         flower.setSpecies(dto.species());
         flower.setColor(dto.color());
         flower.setPlantingDate(dto.plantingDate());
+        flower.setGridPosition(dto.gridPosition()); // Add this line
 
         Flower updated = flowerRepository.save(flower);
 
@@ -105,7 +107,8 @@ public class FlowerService {
                 flower.getFlowerName(),
                 flower.getSpecies(),
                 flower.getColor(),
-                flower.getPlantingDate()
+                flower.getPlantingDate(),
+                flower.getGridPosition() // Add this parameter
         );
     }
 }

@@ -9,5 +9,6 @@ public record FlowerResponseDTO (
         String flowerName,
         String species,
         FlowerColor color,
-        LocalDateTime plantingDate) {
+        LocalDateTime plantingDate,
+        Integer gridPosition) {
 }

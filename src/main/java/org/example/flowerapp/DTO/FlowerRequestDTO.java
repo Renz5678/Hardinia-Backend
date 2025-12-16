@@ -16,5 +16,7 @@ public record FlowerRequestDTO (
         @NotNull(message = "Enter a color!")
         FlowerColor color,
 
-        LocalDateTime plantingDate) {
+        LocalDateTime plantingDate,
+
+        Integer gridPosition) {
 }
