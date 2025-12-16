@@ -100,7 +100,7 @@ public class FlowerRepository {
             ps.setString(2, flower.getSpecies());
             ps.setString(3, flower.getColor() != null ? flower.getColor().getColorName() : null);
             ps.setTimestamp(4, flower.getPlantingDate() != null ? Timestamp.valueOf(flower.getPlantingDate()) : null);
-            ps.setInt(5, flower.getGridPosition());
+            ps.setObject(5, flower.getGridPosition(), java.sql.Types.INTEGER);
             return ps;
         }, keyHolder);
 
@@ -117,12 +117,13 @@ public class FlowerRepository {
     }
 
     private void update(Flower flower) {
-        String sql = "UPDATE flowerdetails SET flower_name = ?, species = ?, color = ?, planting_date = ? WHERE flower_id = ?";
+        String sql = "UPDATE flowerdetails SET flower_name = ?, species = ?, color = ?, planting_date = ?, grid_position = ? WHERE flower_id = ?";
         jdbc.update(sql,
                 flower.getFlowerName(),
                 flower.getSpecies(),
                 flower.getColor() != null ? flower.getColor().getColorName() : null,
                 flower.getPlantingDate(),
+                flower.getGridPosition(),
                 flower.getFlower_id());
     }
 
