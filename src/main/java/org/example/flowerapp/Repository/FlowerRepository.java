@@ -103,8 +103,11 @@ public class FlowerRepository {
             return ps;
         }, keyHolder);
 
+        // Extract flower_id from the keys map
+        Long generatedId = (Long) Objects.requireNonNull(keyHolder.getKeys()).get("flower_id");
+
         return new Flower(
-                Objects.requireNonNull(keyHolder.getKey()).longValue(),
+                generatedId,
                 flower.getFlowerName(),
                 flower.getSpecies(),
                 flower.getColor(),
