@@ -68,20 +68,18 @@ public class GrowthRepository {
     }
 
     private Growth insert(Growth growth) {
-        String sql = "INSERT INTO growthdetails (flower_id, stage, height, color_changes, notes) VALUES(?, ?, ?, ?, ?)";
-        KeyHolder keyHolder = new GeneratedKeyHolder();
+        String sql = "INSERT INTO growthdetails (flower_id, stage, height, color_changes, notes) " +
+                "VALUES(?, ?, ?, ?, ?) RETURNING growth_id";  // PostgreSQL specific
 
-        jdbc.update(connection -> {
-            PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
-            ps.setLong(1, growth.getFlower().getFlower_id());
-            ps.setString(2, getGrowthStageString(growth));
-            ps.setDouble(3, growth.getHeight());
-            ps.setBoolean(4, growth.isColorChanges());
-            ps.setString(5, growth.getNotes());
-            return ps;
-        }, keyHolder);
+        Long generatedId = jdbc.queryForObject(sql, Long.class,
+                growth.getFlower().getFlower_id(),
+                getGrowthStageString(growth),
+                growth.getHeight(),
+                growth.isColorChanges(),
+                growth.getNotes()
+        );
 
-        growth.setGrowth_id(Objects.requireNonNull(keyHolder.getKey()).longValue());
+        growth.setGrowth_id(Objects.requireNonNull(generatedId));
         return growth;
     }
 
