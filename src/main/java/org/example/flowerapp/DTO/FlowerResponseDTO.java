@@ -10,5 +10,12 @@ public record FlowerResponseDTO (
         String species,
         FlowerColor color,
         LocalDateTime plantingDate,
-        Integer gridPosition) {
+        Integer gridPosition,
+        Integer waterFrequencyDays,
+        Integer fertilizeFrequencyDays,
+        Integer pruneFrequencyDays,
+        LocalDateTime lastWateredDate,
+        LocalDateTime lastFertilizedDate,
+        LocalDateTime lastPrunedDate,
+        boolean autoScheduling) {
 }

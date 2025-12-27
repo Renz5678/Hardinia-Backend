@@ -27,7 +27,16 @@ public class FlowerService {
         flower.setSpecies(dto.species());
         flower.setColor(dto.color());
         flower.setPlantingDate(dto.plantingDate());
-        flower.setGridPosition(dto.gridPosition()); // Add this line
+        flower.setGridPosition(dto.gridPosition());
+
+        // Set maintenance scheduling fields
+        flower.setWaterFrequencyDays(dto.waterFrequencyDays());
+        flower.setFertilizeFrequencyDays(dto.fertilizeFrequencyDays());
+        flower.setPruneFrequencyDays(dto.pruneFrequencyDays());
+        flower.setLastWateredDate(dto.lastWateredDate());
+        flower.setLastFertilizedDate(dto.lastFertilizedDate());
+        flower.setLastPrunedDate(dto.lastPrunedDate());
+        flower.setAutoScheduling(dto.autoScheduling() != null ? dto.autoScheduling() : true);
 
         Flower saved = flowerRepository.save(flower);
 
@@ -47,7 +56,18 @@ public class FlowerService {
         flower.setSpecies(dto.species());
         flower.setColor(dto.color());
         flower.setPlantingDate(dto.plantingDate());
-        flower.setGridPosition(dto.gridPosition()); // Add this line
+        flower.setGridPosition(dto.gridPosition());
+
+        // Update maintenance scheduling fields
+        flower.setWaterFrequencyDays(dto.waterFrequencyDays());
+        flower.setFertilizeFrequencyDays(dto.fertilizeFrequencyDays());
+        flower.setPruneFrequencyDays(dto.pruneFrequencyDays());
+        flower.setLastWateredDate(dto.lastWateredDate());
+        flower.setLastFertilizedDate(dto.lastFertilizedDate());
+        flower.setLastPrunedDate(dto.lastPrunedDate());
+        if (dto.autoScheduling() != null) {
+            flower.setAutoScheduling(dto.autoScheduling());
+        }
 
         Flower updated = flowerRepository.save(flower);
 
@@ -108,7 +128,14 @@ public class FlowerService {
                 flower.getSpecies(),
                 flower.getColor(),
                 flower.getPlantingDate(),
-                flower.getGridPosition() // Add this parameter
+                flower.getGridPosition(),
+                flower.getWaterFrequencyDays(),
+                flower.getFertilizeFrequencyDays(),
+                flower.getPruneFrequencyDays(),
+                flower.getLastWateredDate(),
+                flower.getLastFertilizedDate(),
+                flower.getLastPrunedDate(),
+                flower.isAutoScheduling()
         );
     }
 }

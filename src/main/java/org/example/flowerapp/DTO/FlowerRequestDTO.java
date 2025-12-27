@@ -18,5 +18,12 @@ public record FlowerRequestDTO (
 
         LocalDateTime plantingDate,
 
-        Integer gridPosition) {
+        Integer gridPosition,
+        Integer waterFrequencyDays,
+        Integer fertilizeFrequencyDays,
+        Integer pruneFrequencyDays,
+        LocalDateTime lastWateredDate,
+        LocalDateTime lastFertilizedDate,
+        LocalDateTime lastPrunedDate,
+        Boolean autoScheduling) {
 }
