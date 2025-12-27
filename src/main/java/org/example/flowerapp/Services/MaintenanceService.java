@@ -100,7 +100,7 @@ public class MaintenanceService {
     }
 
     private Flower findFlowerByIdOrThrow(long flowerId) {
-        if (flowerRepository.existsById(flowerId)) {
+        if (!flowerRepository.existsById(flowerId)) {
             throw new FlowerNotFoundException("Flower with id " + flowerId + " not found");
         }
         return flowerRepository.findByFlowerId(flowerId);
