@@ -1,0 +1,48 @@
+name: Keep Backend Alive
+
+on:
+  schedule:
+    # Every 14 minutes to keep backend awake
+    - cron: '*/14 * * * *'
+
+    # 5:55 AM Philippine Time (PHT = UTC+8, so 5:55 AM PHT = 9:55 PM UTC previous day)
+    - cron: '55 21 * * *'
+
+  workflow_dispatch:  # Allows manual trigger for testing
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check current time
+        run: |
+          echo "Current UTC time: $(date -u)"
+          echo "Philippine time would be: $(TZ='Asia/Manila' date)"
+
+      - name: Ping backend health endpoint
+        run: |
+          echo "Pinging backend at $(date)"
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://flower-backend-latest-8vkl.onrender.com/health)
+          if [ $response -eq 200 ]; then
+            echo "✅ Backend is alive (HTTP $response)"
+          else
+            echo "❌ Backend response: HTTP $response"
+          fi
+          echo "Ping completed"
+
+      - name: Pre-warm for 6 AM cron (if this is the 5:55 AM run)
+        run: |
+          current_hour=$(date -u +%H)
+          current_minute=$(date -u +%M)
+          
+          # Check if this is the 9:55 PM UTC run (5:55 AM PHT)
+          if [ "$current_hour" -eq "21" ] && [ "$current_minute" -eq "55" ]; then
+            echo "🔥🔥🔥 PRE-WARMING FOR 6:00 AM CRON JOB 🔥🔥🔥"
+            echo "Backend is ready for scheduled maintenance task generation"
+            # Optional: Ping one more time to be extra sure
+            sleep 3
+            curl -s https://flower-backend-latest-8vkl.onrender.com/health > /dev/null
+            echo "✅ Backend fully warmed up!"
+          else
+            echo "Regular keep-alive ping (not pre-cron warmup)"
+          fi
