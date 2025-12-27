@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.flowerapp.DTO.MaintenanceRequestDTO;
 import org.example.flowerapp.DTO.MaintenanceResponseDTO;
 import org.example.flowerapp.Models.Enums.MaintenanceType;
+import org.example.flowerapp.Services.FlowerMaintenanceScheduler;
 import org.example.flowerapp.Services.MaintenanceService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class MaintenanceController {
     private final MaintenanceService maintenanceService;
+    private final FlowerMaintenanceScheduler flowerMaintenanceScheduler;
+
+    @PostMapping("/run-scheduler")
+    public String runScheduler() {
+        flowerMaintenanceScheduler.scheduleMaintenanceTasks();
+        return "Scheduler executed successfully";
+    }
 
     @PostMapping
     public ResponseEntity<  MaintenanceResponseDTO> createNewMaintenance(
