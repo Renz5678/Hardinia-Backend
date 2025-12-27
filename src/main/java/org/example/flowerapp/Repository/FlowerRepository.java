@@ -91,7 +91,13 @@ public class FlowerRepository {
     }
 
     private Flower insert(Flower flower) {
-        String sql = "INSERT INTO flowerdetails (flower_name, species, color, planting_date, grid_position) VALUES(?, ?, ?, ?, ?)";
+        String sql = """
+        INSERT INTO flowerdetails 
+        (flower_name, species, color, planting_date, grid_position, 
+         water_frequency_days, fertilize_frequency_days, prune_frequency_days,
+         last_watered, last_fertilized, last_pruned_date, auto_scheduling) 
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """;
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
         jdbc.update(connection -> {
@@ -101,30 +107,64 @@ public class FlowerRepository {
             ps.setString(3, flower.getColor() != null ? flower.getColor().getColorName() : null);
             ps.setTimestamp(4, flower.getPlantingDate() != null ? Timestamp.valueOf(flower.getPlantingDate()) : null);
             ps.setObject(5, flower.getGridPosition(), java.sql.Types.INTEGER);
+
+            // New fields
+            ps.setObject(6, flower.getWaterFrequencyDays(), java.sql.Types.INTEGER);
+            ps.setObject(7, flower.getFertilizeFrequencyDays(), java.sql.Types.INTEGER);
+            ps.setObject(8, flower.getPruneFrequencyDays(), java.sql.Types.INTEGER);
+            ps.setTimestamp(9, flower.getLastWateredDate() != null ? Timestamp.valueOf(flower.getLastWateredDate()) : null);
+            ps.setTimestamp(10, flower.getLastFertilizedDate() != null ? Timestamp.valueOf(flower.getLastFertilizedDate()) : null);
+            ps.setTimestamp(11, flower.getLastPrunedDate() != null ? Timestamp.valueOf(flower.getLastPrunedDate()) : null);
+            ps.setBoolean(12, flower.isAutoScheduling());
+
             return ps;
         }, keyHolder);
 
         Long generatedId = (Long) Objects.requireNonNull(keyHolder.getKeys()).get("flower_id");
 
-        return new Flower(
-                generatedId,
-                flower.getFlowerName(),
-                flower.getSpecies(),
-                flower.getColor(),
-                flower.getPlantingDate(),
-                flower.getGridPosition()
-        );
+        // Use no-arg constructor + setters instead
+        Flower savedFlower = new Flower();
+        savedFlower.setFlower_id(generatedId);
+        savedFlower.setFlowerName(flower.getFlowerName());
+        savedFlower.setSpecies(flower.getSpecies());
+        savedFlower.setColor(flower.getColor());
+        savedFlower.setPlantingDate(flower.getPlantingDate());
+        savedFlower.setGridPosition(flower.getGridPosition());
+        savedFlower.setWaterFrequencyDays(flower.getWaterFrequencyDays());
+        savedFlower.setFertilizeFrequencyDays(flower.getFertilizeFrequencyDays());
+        savedFlower.setPruneFrequencyDays(flower.getPruneFrequencyDays());
+        savedFlower.setLastWateredDate(flower.getLastWateredDate());
+        savedFlower.setLastFertilizedDate(flower.getLastFertilizedDate());
+        savedFlower.setLastPrunedDate(flower.getLastPrunedDate());
+        savedFlower.setAutoScheduling(flower.isAutoScheduling());
+
+        return savedFlower;
     }
 
     private void update(Flower flower) {
-        String sql = "UPDATE flowerdetails SET flower_name = ?, species = ?, color = ?, planting_date = ?, grid_position = ? WHERE flower_id = ?";
+        String sql = """
+        UPDATE flowerdetails 
+        SET flower_name = ?, species = ?, color = ?, planting_date = ?, grid_position = ?,
+            water_frequency_days = ?, fertilize_frequency_days = ?, prune_frequency_days = ?,
+            last_watered = ?, last_fertilized = ?, last_pruned_date = ?, auto_scheduling = ?
+        WHERE flower_id = ?
+        """;
+
         jdbc.update(sql,
                 flower.getFlowerName(),
                 flower.getSpecies(),
                 flower.getColor() != null ? flower.getColor().getColorName() : null,
-                flower.getPlantingDate(),
+                flower.getPlantingDate() != null ? Timestamp.valueOf(flower.getPlantingDate()) : null,
                 flower.getGridPosition(),
-                flower.getFlower_id());
+                flower.getWaterFrequencyDays(),
+                flower.getFertilizeFrequencyDays(),
+                flower.getPruneFrequencyDays(),
+                flower.getLastWateredDate() != null ? Timestamp.valueOf(flower.getLastWateredDate()) : null,
+                flower.getLastFertilizedDate() != null ? Timestamp.valueOf(flower.getLastFertilizedDate()) : null,
+                flower.getLastPrunedDate() != null ? Timestamp.valueOf(flower.getLastPrunedDate()) : null,
+                flower.isAutoScheduling(),
+                flower.getFlower_id()
+        );
     }
 
     private RowMapper<Flower> flowerRowMapper() {
@@ -133,13 +173,34 @@ public class FlowerRepository {
             flower.setFlower_id(rs.getLong("flower_id"));
             flower.setFlowerName(rs.getString("flower_name"));
             flower.setSpecies(rs.getString("species"));
-            flower.setGridPosition(rs.getInt("grid_position")); // Add this line
+            flower.setGridPosition(rs.getInt("grid_position"));
 
             String colorStr = rs.getString("color");
             flower.setColor(colorStr != null ? FlowerColor.valueOf(colorStr.toUpperCase()) : null);
 
             Timestamp plantingTs = rs.getTimestamp("planting_date");
             flower.setPlantingDate(plantingTs != null ? plantingTs.toLocalDateTime() : null);
+
+            // Map maintenance scheduling fields
+            Integer waterFreq = (Integer) rs.getObject("water_frequency_days");
+            flower.setWaterFrequencyDays(waterFreq);
+
+            Integer fertilizeFreq = (Integer) rs.getObject("fertilize_frequency_days");
+            flower.setFertilizeFrequencyDays(fertilizeFreq);
+
+            Integer pruneFreq = (Integer) rs.getObject("prune_frequency_days");
+            flower.setPruneFrequencyDays(pruneFreq);
+
+            Timestamp lastWateredTs = rs.getTimestamp("last_watered");
+            flower.setLastWateredDate(lastWateredTs != null ? lastWateredTs.toLocalDateTime() : null);
+
+            Timestamp lastFertilizedTs = rs.getTimestamp("last_fertilized");
+            flower.setLastFertilizedDate(lastFertilizedTs != null ? lastFertilizedTs.toLocalDateTime() : null);
+
+            Timestamp lastPrunedTs = rs.getTimestamp("last_pruned_date");
+            flower.setLastPrunedDate(lastPrunedTs != null ? lastPrunedTs.toLocalDateTime() : null);
+
+            flower.setAutoScheduling(rs.getBoolean("auto_scheduling"));
 
             return flower;
         };

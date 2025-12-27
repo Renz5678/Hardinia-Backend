@@ -54,4 +54,7 @@ public class Flower {
 
     @Column(name="last_pruned_date")
     private LocalDateTime lastPrunedDate;
+
+    @Column(name="auto_scheduling")
+    private boolean autoScheduling = true;
 }
