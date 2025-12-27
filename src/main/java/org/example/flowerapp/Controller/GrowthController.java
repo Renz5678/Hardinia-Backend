@@ -38,6 +38,13 @@ public class GrowthController {
         return ResponseEntity.ok(growth);
     }
 
+    @GetMapping("/flower/{flower_id}")
+    public ResponseEntity<List<GrowthResponseDTO>> getGrowthByFlowerId(
+            @PathVariable("flower_id") long flowerId) {
+        List<GrowthResponseDTO> growth = growthService.getGrowthByFlowerId(flowerId);
+        return ResponseEntity.ok(growth);
+    }
+
     @GetMapping("/stage/{growth_stage}")
     public ResponseEntity<List<GrowthResponseDTO>> getGrowthByStage(
             @PathVariable("growth_stage") GrowthStage stage) {

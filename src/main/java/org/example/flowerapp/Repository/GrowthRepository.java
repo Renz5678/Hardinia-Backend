@@ -49,6 +49,11 @@ public class GrowthRepository {
         return jdbc.query(sql, growthRowMapper());
     }
 
+    public List<Growth> findByFlower_FlowerId(long flowerId) {
+        String sql = "SELECT * FROM growthdetails WHERE flower_id = ?";
+        return jdbc.query(sql, growthRowMapper(), flowerId);
+    }
+
     public List<Growth> findByStage(GrowthStage stage) {
         String sql = "SELECT * FROM growthdetails WHERE stage = ?";
         return jdbc.query(sql, growthRowMapper(), stage.getGrowthStage());
@@ -102,7 +107,7 @@ public class GrowthRepository {
             growth.setFlower(flower);
 
             String stageStr = rs.getString("stage");
-            growth.setStage(stageStr != null ? GrowthStage.valueOf(stageStr) : null);
+            growth.setStage(stageStr != null ? GrowthStage.fromString(stageStr) : null);
 
             growth.setHeight(rs.getDouble("height"));
             growth.setColorChanges(rs.getBoolean("color_changes"));

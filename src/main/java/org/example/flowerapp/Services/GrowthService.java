@@ -44,6 +44,14 @@ public class GrowthService {
         return mapToResponseDTO(saved);
     }
 
+    public List<GrowthResponseDTO> getGrowthByFlowerId(long flowerId) {
+        findFlowerByIdOrThrow(flowerId);
+        return growthRepository.findByFlower_FlowerId(flowerId)
+                .stream()
+                .map(this::mapToResponseDTO)
+                .toList();
+    }
+
     public GrowthResponseDTO getGrowthById(long id) {
         Growth growth = findGrowthByIdOrThrow(id);
         return mapToResponseDTO(growth);
