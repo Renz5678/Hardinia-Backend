@@ -36,4 +36,22 @@ public class Flower {
 
     @Column(name="grid_position")
     private Integer gridPosition;
+
+    @Column(name="water_frequency_days")
+    private Integer waterFrequencyDays;
+
+    @Column(name="fertilize_frequency_days")
+    private Integer fertilizeFrequencyDays;
+
+    @Column(name="prune_frequency_days")
+    private Integer pruneFrequencyDays;
+
+    @Column(name="last_watered")
+    private LocalDateTime lastWateredDate;
+
+    @Column(name="last_fertilized")
+    private LocalDateTime lastFertilizedDate;
+
+    @Column(name="last_pruned_date")
+    private LocalDateTime lastPrunedDate;
 }
