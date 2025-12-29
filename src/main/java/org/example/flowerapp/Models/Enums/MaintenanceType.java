@@ -5,7 +5,8 @@ public enum MaintenanceType {
     FERTILIZING("Fertilize"),
     PRUNING("Pruning"),
     PEST_CONTROL("Pest Control"),
-    REPOTTING("Repotting");
+    REPOTTING("Repotting"),
+    SUNLIGHT("Sunlight");
 
     private final String maintenanceType;
 
