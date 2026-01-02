@@ -13,7 +13,6 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-
 public class Maintenance {
     @Id
     @GeneratedValue(strategy=GenerationType.IDENTITY)
@@ -30,6 +29,9 @@ public class Maintenance {
 
     @Column(name="maintenance_date")
     private LocalDateTime scheduledDate;
+
+    @Column(name="due_date")
+    private LocalDateTime dueDate;
 
     @Column(name="notes")
     private String notes;

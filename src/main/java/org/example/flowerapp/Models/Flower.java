@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.example.flowerapp.Models.Enums.FlowerColor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 
 @Entity
@@ -14,7 +15,6 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-
 public class Flower {
     @Id
     @GeneratedValue(strategy= GenerationType.IDENTITY)
@@ -55,6 +55,31 @@ public class Flower {
     @Column(name="last_pruned_date")
     private LocalDateTime lastPrunedDate;
 
+    @Column(name="max_height")
+    private Double maxHeight;
+
+    @Column(name="growth_rate")
+    private Double growthRate;
+
     @Column(name="auto_scheduling")
     private boolean autoScheduling = true;
+
+    // One-to-Many relationship with Growth
+    @OneToMany(mappedBy = "flower", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Growth> growthRecords;
+
+    /**
+     * Gets the most recent growth record for this flower
+     * @return the latest Growth record, or null if none exists
+     */
+    @Transient
+    public Growth getLatestGrowth() {
+        if (growthRecords == null || growthRecords.isEmpty()) {
+            return null;
+        }
+
+        return growthRecords.stream()
+                .max((g1, g2) -> g1.getRecordedAt().compareTo(g2.getRecordedAt()))
+                .orElse(null);
+    }
 }

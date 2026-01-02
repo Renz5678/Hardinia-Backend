@@ -19,13 +19,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class MaintenanceController {
     private final MaintenanceService maintenanceService;
-    private final FlowerMaintenanceScheduler flowerMaintenanceScheduler;
-
-    @PostMapping("/run-scheduler")
-    public String runScheduler() {
-        flowerMaintenanceScheduler.scheduleMaintenanceTasks();
-        return "Scheduler executed successfully";
-    }
 
     @PostMapping
     public ResponseEntity<  MaintenanceResponseDTO> createNewMaintenance(

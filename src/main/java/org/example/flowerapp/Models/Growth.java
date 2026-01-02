@@ -6,12 +6,13 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.example.flowerapp.Models.Enums.GrowthStage;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name="growthdetails")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-
 public class Growth {
     @Id
     @GeneratedValue(strategy=GenerationType.IDENTITY)
@@ -23,10 +24,10 @@ public class Growth {
     private Flower flower;
 
     @Enumerated(EnumType.STRING)
-    @Column(name="stage")
+    @Column(name="stage", nullable=false)
     private GrowthStage stage;
 
-    @Column(name="height")
+    @Column(name="height", nullable=false)
     private double height;
 
     @Column(name="color_changes")
@@ -34,4 +35,17 @@ public class Growth {
 
     @Column(name="notes")
     private String notes;
+
+    @Column(name="recorded_at", nullable=false)
+    private LocalDateTime recordedAt;
+
+    @Column(name="growth_since_last")
+    private Double growthSinceLast; // How much the flower grew since the previous record
+
+    @PrePersist
+    protected void onCreate() {
+        if (recordedAt == null) {
+            recordedAt = LocalDateTime.now();
+        }
+    }
 }
