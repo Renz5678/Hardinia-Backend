@@ -114,7 +114,9 @@ public class GrowthService {
                 growth.getStage(),
                 growth.getHeight(),
                 growth.isColorChanges(),
-                growth.getNotes()
+                growth.getNotes(),
+                growth.getRecordedAt(),
+                growth.getGrowthSinceLast()
         );
     }
 }

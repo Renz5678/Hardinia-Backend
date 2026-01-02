@@ -38,6 +38,10 @@ public class FlowerService {
         flower.setLastPrunedDate(dto.lastPrunedDate());
         flower.setAutoScheduling(dto.autoScheduling() != null ? dto.autoScheduling() : true);
 
+        // Set growth fields
+        flower.setMaxHeight(dto.maxHeight());
+        flower.setGrowthRate(dto.growthRate());
+
         Flower saved = flowerRepository.save(flower);
 
         return mapToResponseDTO(saved);
@@ -68,6 +72,10 @@ public class FlowerService {
         if (dto.autoScheduling() != null) {
             flower.setAutoScheduling(dto.autoScheduling());
         }
+
+        // Update growth fields
+        flower.setMaxHeight(dto.maxHeight());
+        flower.setGrowthRate(dto.growthRate());
 
         Flower updated = flowerRepository.save(flower);
 
@@ -135,7 +143,9 @@ public class FlowerService {
                 flower.getLastWateredDate(),
                 flower.getLastFertilizedDate(),
                 flower.getLastPrunedDate(),
-                flower.isAutoScheduling()
+                flower.isAutoScheduling(),
+                flower.getMaxHeight(),
+                flower.getGrowthRate()
         );
     }
 }

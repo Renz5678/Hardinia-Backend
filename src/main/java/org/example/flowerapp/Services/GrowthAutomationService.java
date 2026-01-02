@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -32,32 +33,48 @@ public class GrowthAutomationService {
         log.info("Starting daily growth update...");
 
         List<Flower> flowersToUpdate = flowerRepository.findByAutoSchedulingTrue();
+        int updatedCount = 0;
 
         for (Flower flower : flowersToUpdate) {
             try {
-                updateFlowerGrowth(flower);
+                GrowthUpdateResult result = updateFlowerGrowth(flower);
+                if (result.isUpdated()) {
+                    updatedCount++;
+                }
             } catch (Exception e) {
                 log.error("Error updating growth for flower ID {}: {}", flower.getFlower_id(), e.getMessage());
             }
         }
 
-        log.info("Daily growth update completed. Updated {} flowers.", flowersToUpdate.size());
+        log.info("Daily growth update completed. Updated {} out of {} flowers.", updatedCount, flowersToUpdate.size());
     }
 
     /**
-     * Updates growth for a single flower
+     * Updates growth for a single flower by editing the existing record
      */
-    public void updateFlowerGrowth(Flower flower) {
+    public GrowthUpdateResult updateFlowerGrowth(Flower flower) {
         // Get the latest growth record
-        Growth latestGrowth = growthRepository
+        Growth existingGrowth = growthRepository
                 .findTopByFlowerOrderByRecordedAtDesc(flower)
                 .orElse(null);
 
-        if (latestGrowth == null) {
+        if (existingGrowth == null) {
             log.warn("No growth record found for flower ID {}. Creating initial record.", flower.getFlower_id());
             createInitialGrowthRecord(flower);
-            return;
+            return new GrowthUpdateResult(
+                    flower.getFlower_id(),
+                    flower.getFlowerName(),
+                    false,
+                    "Initial growth record created",
+                    0.0,
+                    0.0,
+                    GrowthStage.SEED
+            );
         }
+
+        // Store old values for comparison
+        double oldHeight = existingGrowth.getHeight();
+        GrowthStage oldStage = existingGrowth.getStage();
 
         // Check for missed maintenance tasks
         boolean hasMissedTasks = hasMissedMaintenanceTasks(flower);
@@ -65,58 +82,165 @@ public class GrowthAutomationService {
 
         if (allTasksOverdue) {
             log.warn("Flower ID {} has ALL maintenance tasks overdue. Setting to WILTING stage.", flower.getFlower_id());
-            setFlowerToWilting(flower, latestGrowth);
-            return;
+
+            // UPDATE existing record to WILTING
+            existingGrowth.setStage(GrowthStage.WILTING);
+            existingGrowth.setColorChanges(true);
+            existingGrowth.setNotes("Flower is wilting due to neglected maintenance tasks");
+            existingGrowth.setRecordedAt(LocalDateTime.now());
+            existingGrowth.setGrowthSinceLast(0.0);
+
+            growthRepository.save(existingGrowth);
+
+            return new GrowthUpdateResult(
+                    flower.getFlower_id(),
+                    flower.getFlowerName(),
+                    true,
+                    "Set to WILTING - all maintenance overdue",
+                    oldHeight,
+                    existingGrowth.getHeight(),
+                    GrowthStage.WILTING
+            );
         }
 
         if (hasMissedTasks) {
             log.info("Flower ID {} has missed maintenance tasks. Skipping growth update.", flower.getFlower_id());
-            return;
+            return new GrowthUpdateResult(
+                    flower.getFlower_id(),
+                    flower.getFlowerName(),
+                    false,
+                    "Skipped - maintenance overdue",
+                    existingGrowth.getHeight(),
+                    existingGrowth.getHeight(),
+                    existingGrowth.getStage()
+            );
         }
 
         // Calculate days since last growth update
         long daysSinceLastUpdate = ChronoUnit.DAYS.between(
-                latestGrowth.getRecordedAt().toLocalDate(),
+                existingGrowth.getRecordedAt().toLocalDate(),
                 LocalDateTime.now().toLocalDate()
         );
 
         if (daysSinceLastUpdate < 1) {
             log.debug("Growth already updated today for flower ID {}", flower.getFlower_id());
-            return;
+            return new GrowthUpdateResult(
+                    flower.getFlower_id(),
+                    flower.getFlowerName(),
+                    false,
+                    "Already updated today",
+                    existingGrowth.getHeight(),
+                    existingGrowth.getHeight(),
+                    existingGrowth.getStage()
+            );
         }
 
         // Calculate new height
-        double currentHeight = latestGrowth.getHeight();
+        double currentHeight = existingGrowth.getHeight();
         double growthIncrement = flower.getGrowthRate() * daysSinceLastUpdate;
         double newHeight = Math.min(currentHeight + growthIncrement, flower.getMaxHeight());
 
         // Check if flower has reached max height
         if (currentHeight >= flower.getMaxHeight()) {
             log.info("Flower ID {} has reached maximum height. No further growth.", flower.getFlower_id());
-            return;
+            return new GrowthUpdateResult(
+                    flower.getFlower_id(),
+                    flower.getFlowerName(),
+                    false,
+                    "At maximum height",
+                    currentHeight,
+                    currentHeight,
+                    existingGrowth.getStage()
+            );
         }
 
         // Determine growth stage based on height percentage
-        GrowthStage newStage = determineGrowthStage(newHeight, flower.getMaxHeight(), latestGrowth.getStage());
+        GrowthStage newStage = determineGrowthStage(newHeight, flower.getMaxHeight(), existingGrowth.getStage());
 
-        // Create new growth record
-        Growth newGrowthRecord = new Growth();
-        newGrowthRecord.setFlower(flower);
-        newGrowthRecord.setHeight(newHeight);
-        newGrowthRecord.setStage(newStage);
-        newGrowthRecord.setRecordedAt(LocalDateTime.now());
-        newGrowthRecord.setGrowthSinceLast(newHeight - currentHeight);
-        newGrowthRecord.setColorChanges(latestGrowth.isColorChanges());
+        // UPDATE existing growth record (not create new)
+        existingGrowth.setHeight(newHeight);
+        existingGrowth.setStage(newStage);
+        existingGrowth.setRecordedAt(LocalDateTime.now());
+        existingGrowth.setGrowthSinceLast(newHeight - currentHeight);
 
         // Add note if stage changed
-        if (!newStage.equals(latestGrowth.getStage())) {
-            newGrowthRecord.setNotes("Stage changed from " + latestGrowth.getStage() + " to " + newStage);
+        if (!newStage.equals(oldStage)) {
+            existingGrowth.setNotes("Stage changed from " + oldStage + " to " + newStage);
         }
 
-        growthRepository.save(newGrowthRecord);
+        growthRepository.save(existingGrowth);  // This UPDATES the existing record
 
         log.info("Growth updated for flower ID {}. Height: {} cm (+{} cm), Stage: {}",
-                flower.getFlower_id(), newHeight, newGrowthRecord.getGrowthSinceLast(), newStage);
+                flower.getFlower_id(), newHeight, existingGrowth.getGrowthSinceLast(), newStage);
+
+        String message = String.format("Updated successfully - grew %.1f cm (%d days)",
+                existingGrowth.getGrowthSinceLast(), daysSinceLastUpdate);
+
+        if (!newStage.equals(oldStage)) {
+            message += String.format(" - Stage: %s → %s", oldStage, newStage);
+        }
+
+        return new GrowthUpdateResult(
+                flower.getFlower_id(),
+                flower.getFlowerName(),
+                true,
+                message,
+                oldHeight,
+                newHeight,
+                newStage
+        );
+    }
+
+    /**
+     * Performs batch update and returns summary
+     */
+    public String performDailyGrowthUpdateWithSummary() {
+        log.info("Starting daily growth update...");
+
+        List<Flower> flowersToUpdate = flowerRepository.findByAutoSchedulingTrue();
+        List<GrowthUpdateResult> results = new ArrayList<>();
+
+        for (Flower flower : flowersToUpdate) {
+            try {
+                GrowthUpdateResult result = updateFlowerGrowth(flower);
+                results.add(result);
+            } catch (Exception e) {
+                log.error("Error updating growth for flower ID {}: {}", flower.getFlower_id(), e.getMessage());
+                results.add(new GrowthUpdateResult(
+                        flower.getFlower_id(),
+                        flower.getFlowerName(),
+                        false,
+                        "Error: " + e.getMessage(),
+                        0.0,
+                        0.0,
+                        null
+                ));
+            }
+        }
+
+        // Build summary
+        StringBuilder summary = new StringBuilder();
+        summary.append("=== Daily Growth Update Summary ===\n\n");
+        summary.append(String.format("Total flowers processed: %d\n", flowersToUpdate.size()));
+
+        long updated = results.stream().filter(GrowthUpdateResult::isUpdated).count();
+        summary.append(String.format("Successfully updated: %d\n", updated));
+        summary.append(String.format("Skipped/No change: %d\n\n", flowersToUpdate.size() - updated));
+
+        summary.append("Details:\n");
+        for (GrowthUpdateResult result : results) {
+            summary.append(String.format("- [ID: %d] %s: %s (Height: %.1f → %.1f cm)\n",
+                    result.getFlowerId(),
+                    result.getFlowerName(),
+                    result.getMessage(),
+                    result.getOldHeight(),
+                    result.getNewHeight()
+            ));
+        }
+
+        log.info("Daily growth update completed. Updated {} out of {} flowers.", updated, flowersToUpdate.size());
+
+        return summary.toString();
     }
 
     /**
@@ -209,24 +333,6 @@ public class GrowthAutomationService {
     }
 
     /**
-     * Sets a flower to WILTING stage due to neglect
-     */
-    private void setFlowerToWilting(Flower flower, Growth latestGrowth) {
-        Growth wiltingRecord = new Growth();
-        wiltingRecord.setFlower(flower);
-        wiltingRecord.setHeight(latestGrowth.getHeight());
-        wiltingRecord.setStage(GrowthStage.WILTING);
-        wiltingRecord.setRecordedAt(LocalDateTime.now());
-        wiltingRecord.setGrowthSinceLast(0.0);
-        wiltingRecord.setColorChanges(true);
-        wiltingRecord.setNotes("Flower is wilting due to neglected maintenance tasks");
-
-        growthRepository.save(wiltingRecord);
-        log.info("Flower ID {} has been set to WILTING stage due to all maintenance tasks being overdue",
-                flower.getFlower_id());
-    }
-
-    /**
      * Determines growth stage based on current height percentage
      * SEED: 0-20%
      * SEEDLING: 20-40%
@@ -269,5 +375,37 @@ public class GrowthAutomationService {
 
         growthRepository.save(initialGrowth);
         log.info("Created initial growth record for flower ID {}", flower.getFlower_id());
+    }
+
+    /**
+     * Inner class to hold growth update results
+     */
+    public static class GrowthUpdateResult {
+        private final Long flowerId;
+        private final String flowerName;
+        private final boolean updated;
+        private final String message;
+        private final double oldHeight;
+        private final double newHeight;
+        private final GrowthStage stage;
+
+        public GrowthUpdateResult(Long flowerId, String flowerName, boolean updated, String message,
+                                  double oldHeight, double newHeight, GrowthStage stage) {
+            this.flowerId = flowerId;
+            this.flowerName = flowerName;
+            this.updated = updated;
+            this.message = message;
+            this.oldHeight = oldHeight;
+            this.newHeight = newHeight;
+            this.stage = stage;
+        }
+
+        public Long getFlowerId() { return flowerId; }
+        public String getFlowerName() { return flowerName; }
+        public boolean isUpdated() { return updated; }
+        public String getMessage() { return message; }
+        public double getOldHeight() { return oldHeight; }
+        public double getNewHeight() { return newHeight; }
+        public GrowthStage getStage() { return stage; }
     }
 }

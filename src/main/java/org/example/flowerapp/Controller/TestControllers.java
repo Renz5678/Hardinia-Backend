@@ -22,7 +22,6 @@ public class TestControllers {
 
     @PostMapping("/run_growth")
     public String runGrowth() {
-        growthAutomationService.performDailyGrowthUpdate();
-        return "Daily growth update ran :)";
+        return growthAutomationService.performDailyGrowthUpdateWithSummary();
     }
 }

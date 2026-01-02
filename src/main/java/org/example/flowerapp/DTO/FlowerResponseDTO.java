@@ -17,5 +17,7 @@ public record FlowerResponseDTO (
         LocalDateTime lastWateredDate,
         LocalDateTime lastFertilizedDate,
         LocalDateTime lastPrunedDate,
-        boolean autoScheduling) {
+        boolean autoScheduling,
+        Double maxHeight,
+        Double growthRate) {
 }
