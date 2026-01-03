@@ -64,6 +64,8 @@ public class Flower {
     @Column(name="auto_scheduling")
     private boolean autoScheduling = true;
 
+    @Column(name="user_id")
+    private String userId;
     // One-to-Many relationship with Growth
     @OneToMany(mappedBy = "flower", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Growth> growthRecords;

@@ -168,7 +168,7 @@ public class FlowerMaintenanceScheduler {
         LocalDateTime endOfDay = startOfDay.plusDays(1);
 
         boolean exists = maintenanceRepository.existsByFlowerAndTypeAndDateRange(
-                flower.getFlower_id(), type, startOfDay, endOfDay
+                flower.getFlower_id(), type, startOfDay, endOfDay, flower.getUserId()
         );
 
         log.debug("    Checking if {} task exists for today ({} to {}): {}",

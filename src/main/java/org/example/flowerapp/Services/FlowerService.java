@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.example.flowerapp.DTO.FlowerRequestDTO;
 import org.example.flowerapp.DTO.FlowerResponseDTO;
 import org.example.flowerapp.Exceptions.BusinessLogicExceptions.DuplicateFlowerException;
-import org.example.flowerapp.Exceptions.EntityNotFoundExceptions.FlowerNotFoundException;
 import org.example.flowerapp.Models.Flower;
 import org.example.flowerapp.Repository.FlowerRepository;
 import org.springframework.stereotype.Service;
@@ -19,10 +18,11 @@ public class FlowerService {
     private final FlowerRepository flowerRepository;
 
     @Transactional
-    public FlowerResponseDTO addNewFlower(FlowerRequestDTO dto) {
-        checkDuplicateFlowerName(dto.flowerName());
+    public FlowerResponseDTO addNewFlower(FlowerRequestDTO dto, String userId) {
+        checkDuplicateFlowerName(dto.flowerName(), userId);
 
         Flower flower = new Flower();
+        flower.setUserId(userId);  // Set userId
         flower.setFlowerName(dto.flowerName());
         flower.setSpecies(dto.species());
         flower.setColor(dto.color());
@@ -48,12 +48,12 @@ public class FlowerService {
     }
 
     @Transactional
-    public FlowerResponseDTO updateFlower(FlowerRequestDTO dto, long id) {
-        Flower flower = findFlowerByIdOrThrow(id);
+    public FlowerResponseDTO updateFlower(FlowerRequestDTO dto, long id, String userId) {
+        Flower flower = findFlowerByIdOrThrow(id, userId);
 
         // Check for duplicate name only if the name is being changed
         if (!flower.getFlowerName().equals(dto.flowerName())) {
-            checkDuplicateFlowerName(dto.flowerName());
+            checkDuplicateFlowerName(dto.flowerName(), userId);
         }
 
         flower.setFlowerName(dto.flowerName());
@@ -82,51 +82,51 @@ public class FlowerService {
         return mapToResponseDTO(updated);
     }
 
-    public FlowerResponseDTO getFlowerById(long id) {
-        Flower flower = findFlowerByIdOrThrow(id);
+    public FlowerResponseDTO getFlowerById(long id, String userId) {
+        Flower flower = findFlowerByIdOrThrow(id, userId);
         return mapToResponseDTO(flower);
     }
 
-    public List<FlowerResponseDTO> getAllFlowers() {
-        return flowerRepository.findAllFlower()
+    public List<FlowerResponseDTO> getAllFlowers(String userId) {
+        return flowerRepository.findAllFlowerByUserId(userId)
                 .stream()
                 .map(this::mapToResponseDTO)
                 .toList();
     }
 
-    public long getFlowerCount() {
-        return flowerRepository.findAllFlower().size();
+    public long getFlowerCount(String userId) {
+        return flowerRepository.countByUserId(userId);
     }
 
-    public List<FlowerResponseDTO> getAllFlowersBySpecies(String species) {
-        return flowerRepository.findBySpecies(species)
+    public List<FlowerResponseDTO> getAllFlowersBySpecies(String species, String userId) {
+        return flowerRepository.findBySpeciesAndUserId(species, userId)
                 .stream()
                 .map(this::mapToResponseDTO)
                 .toList();
     }
 
-    public List<FlowerResponseDTO> getAllFlowerByColor(String color) {
-        return flowerRepository.findByColor(color)
+    public List<FlowerResponseDTO> getAllFlowerByColor(String color, String userId) {
+        return flowerRepository.findByColorAndUserId(color, userId)
                 .stream()
                 .map(this::mapToResponseDTO)
                 .toList();
     }
 
     @Transactional
-    public void deleteFlower(long id) {
-        findFlowerByIdOrThrow(id);
-        flowerRepository.deleteFlower(id);
+    public void deleteFlower(long id, String userId) {
+        findFlowerByIdOrThrow(id, userId);
+        flowerRepository.deleteFlower(id, userId);
     }
 
-    private void checkDuplicateFlowerName(String flowerName) {
-        if (flowerRepository.existsByName(flowerName)) {
+    private void checkDuplicateFlowerName(String flowerName, String userId) {
+        if (flowerRepository.existsByNameAndUserId(flowerName, userId)) {
             throw new DuplicateFlowerException("Flower name already exists!");
         }
     }
 
-    private Flower findFlowerByIdOrThrow(long id) {
-        flowerRepository.validateExists(id);
-        return flowerRepository.findByFlowerId(id);
+    private Flower findFlowerByIdOrThrow(long id, String userId) {
+        flowerRepository.validateExists(id, userId);
+        return flowerRepository.findByFlowerIdAndUserId(id, userId);
     }
 
     private FlowerResponseDTO mapToResponseDTO(Flower flower) {

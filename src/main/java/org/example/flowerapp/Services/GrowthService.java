@@ -23,10 +23,11 @@ public class GrowthService {
     private final FlowerRepository flowerRepository;
 
     @Transactional
-    public GrowthResponseDTO addNewGrowth(GrowthRequestDTO dto) {
-        Flower flower = findFlowerByIdOrThrow(dto.flower_id());
+    public GrowthResponseDTO addNewGrowth(GrowthRequestDTO dto, String userId) {
+        Flower flower = findFlowerByIdOrThrow(dto.flower_id(), userId);
 
         Growth growth = new Growth();
+        growth.setUserId(userId);  // Set userId on new growth
         updateGrowthFromDTO(growth, dto, flower);
 
         Growth saved = growthRepository.save(growth);
@@ -34,9 +35,9 @@ public class GrowthService {
     }
 
     @Transactional
-    public GrowthResponseDTO updateGrowth(GrowthRequestDTO dto, long id) {
-        Growth growth = findGrowthByIdOrThrow(id);
-        Flower flower = findFlowerByIdOrThrow(dto.flower_id());
+    public GrowthResponseDTO updateGrowth(GrowthRequestDTO dto, long id, String userId) {
+        Growth growth = findGrowthByIdOrThrow(id, userId);
+        Flower flower = findFlowerByIdOrThrow(dto.flower_id(), userId);
 
         updateGrowthFromDTO(growth, dto, flower);
 
@@ -44,44 +45,44 @@ public class GrowthService {
         return mapToResponseDTO(saved);
     }
 
-    public List<GrowthResponseDTO> getGrowthByFlowerId(long flowerId) {
-        findFlowerByIdOrThrow(flowerId);
-        return growthRepository.findByFlower_FlowerId(flowerId)
+    public List<GrowthResponseDTO> getGrowthByFlowerId(long flowerId, String userId) {
+        findFlowerByIdOrThrow(flowerId, userId);
+        return growthRepository.findByFlowerIdAndUserId(flowerId, userId)
                 .stream()
                 .map(this::mapToResponseDTO)
                 .toList();
     }
 
-    public GrowthResponseDTO getGrowthById(long id) {
-        Growth growth = findGrowthByIdOrThrow(id);
+    public GrowthResponseDTO getGrowthById(long id, String userId) {
+        Growth growth = findGrowthByIdOrThrow(id, userId);
         return mapToResponseDTO(growth);
     }
 
-    public List<GrowthResponseDTO> getAllGrowthDetails() {
-        return growthRepository.findAllGrowth()
+    public List<GrowthResponseDTO> getAllGrowthDetails(String userId) {
+        return growthRepository.findAllGrowthByUserId(userId)
                 .stream()
                 .map(this::mapToResponseDTO)
                 .toList();
     }
 
-    public List<GrowthResponseDTO> getGrowthByStage(GrowthStage stage) {
-        return growthRepository.findByStage(stage)
+    public List<GrowthResponseDTO> getGrowthByStage(GrowthStage stage, String userId) {
+        return growthRepository.findByStageAndUserId(stage, userId)
                 .stream()
                 .map(this::mapToResponseDTO)
                 .toList();
     }
 
-    public List<GrowthResponseDTO> getGrowthByColorChanges(boolean colorChanges) {
-        return growthRepository.findByColorChanges(colorChanges)
+    public List<GrowthResponseDTO> getGrowthByColorChanges(boolean colorChanges, String userId) {
+        return growthRepository.findByColorChangesAndUserId(colorChanges, userId)
                 .stream()
                 .map(this::mapToResponseDTO)
                 .toList();
     }
 
     @Transactional
-    public void deleteGrowth(long id) {
-        findGrowthByIdOrThrow(id);
-        growthRepository.deleteGrowth(id);
+    public void deleteGrowth(long id, String userId) {
+        findGrowthByIdOrThrow(id, userId);
+        growthRepository.deleteGrowth(id, userId);
     }
 
     private void updateGrowthFromDTO(Growth growth, GrowthRequestDTO dto, Flower flower) {
@@ -92,15 +93,15 @@ public class GrowthService {
         growth.setNotes(dto.notes());
     }
 
-    private Flower findFlowerByIdOrThrow(long flowerId) {
-        if (!flowerRepository.existsById(flowerId)) {
+    private Flower findFlowerByIdOrThrow(long flowerId, String userId) {
+        if (!flowerRepository.existsByIdAndUserId(flowerId, userId)) {
             throw new FlowerNotFoundException("Flower with id " + flowerId + " not found");
         }
-        return flowerRepository.findByFlowerId(flowerId);
+        return flowerRepository.findByFlowerIdAndUserId(flowerId, userId);
     }
 
-    private Growth findGrowthByIdOrThrow(long id) {
-        Growth growth = growthRepository.findByGrowthId(id);
+    private Growth findGrowthByIdOrThrow(long id, String userId) {
+        Growth growth = growthRepository.findByGrowthIdAndUserId(id, userId);
         if (growth == null) {
             throw new GrowthNotFoundException("Growth Details with id " + id + " not found");
         }

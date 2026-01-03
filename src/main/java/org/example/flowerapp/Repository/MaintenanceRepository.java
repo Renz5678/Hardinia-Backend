@@ -17,6 +17,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 @Repository
 public class MaintenanceRepository {
@@ -37,33 +38,33 @@ public class MaintenanceRepository {
         }
     }
 
-    public Maintenance findByTaskId(long taskId) {
-        String sql = "SELECT * FROM maintenance WHERE task_id = ?";
+    public Maintenance findByTaskIdAndUserId(long taskId, String userId) {
+        String sql = "SELECT * FROM maintenance WHERE task_id = ? AND user_id = ?";
         try {
-            return jdbc.queryForObject(sql, maintenanceRowMapper(), taskId);
+            return jdbc.queryForObject(sql, maintenanceRowMapper(), taskId, UUID.fromString(userId));
         } catch (EmptyResultDataAccessException e) {
             throw new MaintenanceNotFoundException(taskId);
         }
     }
 
-    public List<Maintenance> findAllMaintenance() {
-        String sql = "SELECT * FROM maintenance";
-        return jdbc.query(sql, maintenanceRowMapper());
+    public List<Maintenance> findAllMaintenanceByUserId(String userId) {
+        String sql = "SELECT * FROM maintenance WHERE user_id = ?";
+        return jdbc.query(sql, maintenanceRowMapper(), UUID.fromString(userId));
     }
 
-    public List<Maintenance> findByFlowerId(long flowerId) {
-        String sql = "SELECT * FROM maintenance WHERE flower_id = ?";
-        return jdbc.query(sql, maintenanceRowMapper(), flowerId);
+    public List<Maintenance> findByFlowerIdAndUserId(long flowerId, String userId) {
+        String sql = "SELECT * FROM maintenance WHERE flower_id = ? AND user_id = ?";
+        return jdbc.query(sql, maintenanceRowMapper(), flowerId, UUID.fromString(userId));
     }
 
-    public List<Maintenance> findByMaintenanceType(MaintenanceType maintenanceType) {
-        String sql = "SELECT * FROM maintenance WHERE maintenance_type = ?";
-        return jdbc.query(sql, maintenanceRowMapper(), maintenanceType.name());
+    public List<Maintenance> findByMaintenanceTypeAndUserId(MaintenanceType maintenanceType, String userId) {
+        String sql = "SELECT * FROM maintenance WHERE maintenance_type = ? AND user_id = ?";
+        return jdbc.query(sql, maintenanceRowMapper(), maintenanceType.name(), UUID.fromString(userId));
     }
 
-    public List<Maintenance> findByMaintenanceDate(LocalDateTime dateTime) {
-        String sql = "SELECT * FROM maintenance WHERE maintenance_date = ?";
-        return jdbc.query(sql, maintenanceRowMapper(), Timestamp.valueOf(dateTime));
+    public List<Maintenance> findByMaintenanceDateAndUserId(LocalDateTime dateTime, String userId) {
+        String sql = "SELECT * FROM maintenance WHERE maintenance_date = ? AND user_id = ?";
+        return jdbc.query(sql, maintenanceRowMapper(), Timestamp.valueOf(dateTime), UUID.fromString(userId));
     }
 
     // New method required by GrowthAutomationService
@@ -71,41 +72,48 @@ public class MaintenanceRepository {
         String sql = """
         SELECT * FROM maintenance 
         WHERE flower_id = ? 
+        AND user_id = ?
         AND completed = false 
         AND due_date < ?
         ORDER BY due_date ASC
         """;
-        return jdbc.query(sql, maintenanceRowMapper(), flower.getFlower_id(), Timestamp.valueOf(dateTime));
+        return jdbc.query(sql, maintenanceRowMapper(), flower.getFlower_id(),
+                UUID.fromString(flower.getUserId()), Timestamp.valueOf(dateTime));
     }
 
     // Alternative method using flower ID
-    public List<Maintenance> findByFlowerIdAndCompletedFalseAndDueDateBefore(long flowerId, LocalDateTime dateTime) {
+    public List<Maintenance> findByFlowerIdAndCompletedFalseAndDueDateBeforeAndUserId(
+            long flowerId, LocalDateTime dateTime, String userId) {
         String sql = """
         SELECT * FROM maintenance 
         WHERE flower_id = ? 
+        AND user_id = ?
         AND completed = false 
         AND due_date < ?
         ORDER BY due_date ASC
         """;
-        return jdbc.query(sql, maintenanceRowMapper(), flowerId, Timestamp.valueOf(dateTime));
+        return jdbc.query(sql, maintenanceRowMapper(), flowerId,
+                UUID.fromString(userId), Timestamp.valueOf(dateTime));
     }
 
-    public boolean deleteMaintenance(long id) {
-        String sql = "DELETE FROM maintenance WHERE task_id = ?";
-        return jdbc.update(sql, id) != 0;
+    public boolean deleteMaintenance(long id, String userId) {
+        String sql = "DELETE FROM maintenance WHERE task_id = ? AND user_id = ?";
+        return jdbc.update(sql, id, UUID.fromString(userId)) != 0;
     }
 
     public boolean existsByFlowerAndTypeAndDateRange(long flowerId, MaintenanceType type,
-                                                     LocalDateTime start, LocalDateTime end) {
+                                                     LocalDateTime start, LocalDateTime end, String userId) {
         String sql = """
         SELECT COUNT(*) FROM maintenance 
         WHERE flower_id = ? 
+        AND user_id = ?
         AND maintenance_type = ? 
         AND maintenance_date BETWEEN ? AND ?
         """;
 
         Integer count = jdbc.queryForObject(sql, Integer.class,
                 flowerId,
+                UUID.fromString(userId),
                 type.name(),
                 Timestamp.valueOf(start),
                 Timestamp.valueOf(end)
@@ -114,36 +122,41 @@ public class MaintenanceRepository {
         return count != null && count > 0;
     }
 
-    public List<Maintenance> findIncompleteByFlowerId(long flowerId) {
-        String sql = "SELECT * FROM maintenance WHERE flower_id = ? AND completed = false";
-        return jdbc.query(sql, maintenanceRowMapper(), flowerId);
+    public List<Maintenance> findIncompleteByFlowerIdAndUserId(long flowerId, String userId) {
+        String sql = "SELECT * FROM maintenance WHERE flower_id = ? AND user_id = ? AND completed = false";
+        return jdbc.query(sql, maintenanceRowMapper(), flowerId, UUID.fromString(userId));
     }
 
-    public List<Maintenance> findByCompletedStatus(boolean completed) {
-        String sql = "SELECT * FROM maintenance WHERE completed = ?";
-        return jdbc.query(sql, maintenanceRowMapper(), completed);
+    public List<Maintenance> findByCompletedStatusAndUserId(boolean completed, String userId) {
+        String sql = "SELECT * FROM maintenance WHERE completed = ? AND user_id = ?";
+        return jdbc.query(sql, maintenanceRowMapper(), completed, UUID.fromString(userId));
     }
 
-    public boolean existsByFlowerAndTypeAndCompleted(long flowerId, MaintenanceType type, boolean completed) {
+    public boolean existsByFlowerAndTypeAndCompleted(long flowerId, MaintenanceType type,
+                                                     boolean completed, String userId) {
         String sql = """
         SELECT COUNT(*) > 0 
         FROM maintenance 
         WHERE flower_id = ? 
+        AND user_id = ?
         AND maintenance_type = ? 
         AND completed = ?
         AND auto_generated = true
         """;
-        Boolean result = jdbc.queryForObject(sql, Boolean.class, flowerId, type.name(), completed);
+        Boolean result = jdbc.queryForObject(sql, Boolean.class, flowerId,
+                UUID.fromString(userId), type.name(), completed);
         return result != null && result;
     }
 
-    public long countOverdueTasks() {
+    public long countOverdueTasksByUserId(String userId) {
         String sql = """
         SELECT COUNT(*) FROM maintenance 
-        WHERE completed = false 
+        WHERE user_id = ?
+        AND completed = false 
         AND due_date < ?
         """;
-        Long count = jdbc.queryForObject(sql, Long.class, Timestamp.valueOf(LocalDateTime.now()));
+        Long count = jdbc.queryForObject(sql, Long.class, UUID.fromString(userId),
+                Timestamp.valueOf(LocalDateTime.now()));
         return count != null ? count : 0;
     }
 
@@ -151,8 +164,8 @@ public class MaintenanceRepository {
         String sql = """
         INSERT INTO maintenance 
         (flower_id, maintenance_type, maintenance_date, due_date, notes, performed_by, 
-         created_at, completed, completed_at, auto_generated) 
-        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         created_at, completed, completed_at, auto_generated, user_id) 
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """;
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
@@ -168,6 +181,7 @@ public class MaintenanceRepository {
             ps.setBoolean(8, maintenance.isCompleted());
             ps.setTimestamp(9, maintenance.getCompletedAt() != null ? Timestamp.valueOf(maintenance.getCompletedAt()) : null);
             ps.setBoolean(10, maintenance.isAutoGenerated());
+            ps.setObject(11, UUID.fromString(maintenance.getUserId()), java.sql.Types.OTHER);
             return ps;
         }, keyHolder);
 
@@ -181,7 +195,7 @@ public class MaintenanceRepository {
         UPDATE maintenance 
         SET maintenance_type = ?, maintenance_date = ?, due_date = ?, notes = ?, 
             performed_by = ?, created_at = ?, completed = ?, completed_at = ?, auto_generated = ?
-        WHERE task_id = ?
+        WHERE task_id = ? AND user_id = ?
         """;
         jdbc.update(sql,
                 maintenance.getTaskType() != null ? maintenance.getTaskType().name() : null,
@@ -193,7 +207,8 @@ public class MaintenanceRepository {
                 maintenance.isCompleted(),
                 maintenance.getCompletedAt() != null ? Timestamp.valueOf(maintenance.getCompletedAt()) : null,
                 maintenance.isAutoGenerated(),
-                maintenance.getTask_id());
+                maintenance.getTask_id(),
+                UUID.fromString(maintenance.getUserId()));
     }
 
     private RowMapper<Maintenance> maintenanceRowMapper() {
@@ -201,7 +216,13 @@ public class MaintenanceRepository {
             Maintenance maintenance = new Maintenance();
             maintenance.setTask_id(rs.getLong("task_id"));
 
-            Flower flower = flowerRepository.findByFlowerId(rs.getLong("flower_id"));
+            // Get user_id first
+            UUID userIdUUID = (UUID) rs.getObject("user_id");
+            String userId = userIdUUID != null ? userIdUUID.toString() : null;
+            maintenance.setUserId(userId);
+
+            // Fetch flower with userId
+            Flower flower = flowerRepository.findByFlowerIdAndUserId(rs.getLong("flower_id"), userId);
             maintenance.setFlower(flower);
             maintenance.setTaskType(MaintenanceType.valueOf(rs.getString("maintenance_type")));
 

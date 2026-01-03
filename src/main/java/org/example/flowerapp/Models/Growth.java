@@ -42,6 +42,8 @@ public class Growth {
     @Column(name="growth_since_last")
     private Double growthSinceLast; // How much the flower grew since the previous record
 
+    @Column(name="user_id")
+    private String userId;
     @PrePersist
     protected void onCreate() {
         if (recordedAt == null) {

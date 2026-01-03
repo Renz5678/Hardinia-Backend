@@ -7,6 +7,7 @@ import org.example.flowerapp.DTO.FlowerResponseDTO;
 import org.example.flowerapp.Services.FlowerService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,51 +20,70 @@ public class FlowerController {
     private final FlowerService flowerService;
 
     @PostMapping
-    public ResponseEntity<FlowerResponseDTO> createFlower(@Valid @RequestBody FlowerRequestDTO dto) {
-        FlowerResponseDTO created = flowerService.addNewFlower(dto);
+    public ResponseEntity<FlowerResponseDTO> createFlower(
+            @Valid @RequestBody FlowerRequestDTO dto,
+            Authentication authentication) {
+        String userId = (String) authentication.getPrincipal();
+        FlowerResponseDTO created = flowerService.addNewFlower(dto, userId);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @GetMapping
-    public ResponseEntity<List<FlowerResponseDTO>> getAllFlowers() {
-        List<FlowerResponseDTO> flowers = flowerService.getAllFlowers();
+    public ResponseEntity<List<FlowerResponseDTO>> getAllFlowers(Authentication authentication) {
+        String userId = (String) authentication.getPrincipal();
+        List<FlowerResponseDTO> flowers = flowerService.getAllFlowers(userId);
         return ResponseEntity.ok(flowers);
     }
 
     @GetMapping("/number_of_flowers")
-    public ResponseEntity<Long> getNumberOfFlowers() {
-        return ResponseEntity.ok(flowerService.getFlowerCount());
+    public ResponseEntity<Long> getNumberOfFlowers(Authentication authentication) {
+        String userId = (String) authentication.getPrincipal();
+        return ResponseEntity.ok(flowerService.getFlowerCount(userId));
     }
 
     @GetMapping("/{flower_id}")
-    public ResponseEntity<FlowerResponseDTO> getFlowerById(@PathVariable("flower_id") long flowerId) {
-        FlowerResponseDTO flower = flowerService.getFlowerById(flowerId);
+    public ResponseEntity<FlowerResponseDTO> getFlowerById(
+            @PathVariable("flower_id") long flowerId,
+            Authentication authentication) {
+        String userId = (String) authentication.getPrincipal();
+        FlowerResponseDTO flower = flowerService.getFlowerById(flowerId, userId);
         return ResponseEntity.ok(flower);
     }
 
     @GetMapping("/species/{species}")
-    public ResponseEntity<List<FlowerResponseDTO>> getFlowersBySpecies(@PathVariable String species) {
-        List<FlowerResponseDTO> flowers = flowerService.getAllFlowersBySpecies(species);
+    public ResponseEntity<List<FlowerResponseDTO>> getFlowersBySpecies(
+            @PathVariable String species,
+            Authentication authentication) {
+        String userId = (String) authentication.getPrincipal();
+        List<FlowerResponseDTO> flowers = flowerService.getAllFlowersBySpecies(species, userId);
         return ResponseEntity.ok(flowers);
     }
 
     @GetMapping("/color/{color}")
-    public ResponseEntity<List<FlowerResponseDTO>> getFlowersByColor(@PathVariable String color) {
-        List<FlowerResponseDTO> flowers = flowerService.getAllFlowerByColor(color);
+    public ResponseEntity<List<FlowerResponseDTO>> getFlowersByColor(
+            @PathVariable String color,
+            Authentication authentication) {
+        String userId = (String) authentication.getPrincipal();
+        List<FlowerResponseDTO> flowers = flowerService.getAllFlowerByColor(color, userId);
         return ResponseEntity.ok(flowers);
     }
 
     @PutMapping("/{flower_id}")
     public ResponseEntity<FlowerResponseDTO> updateFlower(
             @Valid @RequestBody FlowerRequestDTO dto,
-            @PathVariable("flower_id") long flowerId) {
-        FlowerResponseDTO updated = flowerService.updateFlower(dto, flowerId);
+            @PathVariable("flower_id") long flowerId,
+            Authentication authentication) {
+        String userId = (String) authentication.getPrincipal();
+        FlowerResponseDTO updated = flowerService.updateFlower(dto, flowerId, userId);
         return ResponseEntity.ok(updated);
     }
 
     @DeleteMapping("/{flower_id}")
-    public ResponseEntity<Void> deleteFlower(@PathVariable("flower_id") long flowerId) {
-        flowerService.deleteFlower(flowerId);
+    public ResponseEntity<Void> deleteFlower(
+            @PathVariable("flower_id") long flowerId,
+            Authentication authentication) {
+        String userId = (String) authentication.getPrincipal();
+        flowerService.deleteFlower(flowerId, userId);
         return ResponseEntity.noContent().build();
     }
 }

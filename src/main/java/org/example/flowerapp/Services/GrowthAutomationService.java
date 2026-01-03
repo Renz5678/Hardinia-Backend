@@ -33,6 +33,8 @@ public class GrowthAutomationService {
     public void performWeeklyGrowthUpdate() {
         log.info("Starting weekly growth update...");
 
+        // Note: This scheduled task updates ALL users' flowers
+        // We need to get all flowers with auto-scheduling enabled across all users
         List<Flower> flowersToUpdate = flowerRepository.findByAutoSchedulingTrue();
         int updatedCount = 0;
 
@@ -55,9 +57,11 @@ public class GrowthAutomationService {
      * Growth rate is calculated as percentage of max height per week
      */
     public GrowthUpdateResult updateFlowerGrowth(Flower flower) {
+        String userId = flower.getUserId();
+
         // Get the latest growth record
         Growth existingGrowth = growthRepository
-                .findTopByFlowerOrderByRecordedAtDesc(flower)
+                .findTopByFlowerAndUserIdOrderByRecordedAtDesc(flower, userId)
                 .orElse(null);
 
         if (existingGrowth == null) {
@@ -381,6 +385,7 @@ public class GrowthAutomationService {
     private void createInitialGrowthRecord(Flower flower) {
         Growth initialGrowth = new Growth();
         initialGrowth.setFlower(flower);
+        initialGrowth.setUserId(flower.getUserId());  // Set userId
         initialGrowth.setHeight(0.0);
         initialGrowth.setStage(GrowthStage.SEED);
         initialGrowth.setRecordedAt(flower.getPlantingDate() != null ?

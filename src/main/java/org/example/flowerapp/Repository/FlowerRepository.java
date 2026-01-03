@@ -15,6 +15,7 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 @Repository
 public class FlowerRepository {
@@ -33,66 +34,71 @@ public class FlowerRepository {
         }
     }
 
-    public Flower findByFlowerId(long flowerId) {
-        String sql = "SELECT * FROM flowerdetails WHERE flower_id = ?";
+    public Flower findByFlowerIdAndUserId(long flowerId, String userId) {
+        String sql = "SELECT * FROM flowerdetails WHERE flower_id = ? AND user_id = ?";
         try {
-            return jdbc.queryForObject(sql, flowerRowMapper(), flowerId);
+            return jdbc.queryForObject(sql, flowerRowMapper(), flowerId, UUID.fromString(userId));
         } catch (EmptyResultDataAccessException e) {
             throw new FlowerNotFoundException(flowerId);
         }
     }
 
-    public boolean existsByName(String flowerName) {
-        String sql = "SELECT COUNT(*) FROM flowerdetails WHERE flower_name = ?";
-        Integer count = jdbc.queryForObject(sql, Integer.class, flowerName);
+    public boolean existsByNameAndUserId(String flowerName, String userId) {
+        String sql = "SELECT COUNT(*) FROM flowerdetails WHERE flower_name = ? AND user_id = ?";
+        Integer count = jdbc.queryForObject(sql, Integer.class, flowerName, UUID.fromString(userId));
         return count != null && count > 0;
     }
 
-    public boolean existsById(long id) {
-        String sql = "SELECT COUNT(*) FROM flowerdetails WHERE flower_id = ?";
-        Integer count = jdbc.queryForObject(sql, Integer.class, id);
+    public boolean existsByIdAndUserId(long id, String userId) {
+        String sql = "SELECT COUNT(*) FROM flowerdetails WHERE flower_id = ? AND user_id = ?";
+        Integer count = jdbc.queryForObject(sql, Integer.class, id, UUID.fromString(userId));
         return count != null && count > 0;
     }
 
-    public void validateExists(long id) {
-        if (!existsById(id)) {
+    public void validateExists(long id, String userId) {
+        if (!existsByIdAndUserId(id, userId)) {
             throw new FlowerNotFoundException("Flower with id " + id + " not found");
         }
     }
 
-    public List<Flower> findAllFlower() {
-        String sql = "SELECT * FROM flowerdetails";
-        return jdbc.query(sql, flowerRowMapper());
+    public List<Flower> findAllFlowerByUserId(String userId) {
+        String sql = "SELECT * FROM flowerdetails WHERE user_id = ?";
+        return jdbc.query(sql, flowerRowMapper(), UUID.fromString(userId));
     }
 
-    public List<Flower> findBySpecies(String species) {
-        String sql = "SELECT * FROM flowerdetails WHERE species = ?";
-        return jdbc.query(sql, flowerRowMapper(), species);
+    public List<Flower> findBySpeciesAndUserId(String species, String userId) {
+        String sql = "SELECT * FROM flowerdetails WHERE species = ? AND user_id = ?";
+        return jdbc.query(sql, flowerRowMapper(), species, UUID.fromString(userId));
     }
 
-    public List<Flower> findByColor(String color) {
-        String sql = "SELECT * FROM flowerdetails WHERE color = ?";
-        return jdbc.query(sql, flowerRowMapper(), color);
+    public List<Flower> findByColorAndUserId(String color, String userId) {
+        String sql = "SELECT * FROM flowerdetails WHERE color = ? AND user_id = ?";
+        return jdbc.query(sql, flowerRowMapper(), color, UUID.fromString(userId));
     }
 
-    public List<Flower> findByAutoSchedulingTrue() {
-        String sql = "SELECT * FROM flowerdetails WHERE auto_scheduling = true";
-        return jdbc.query(sql, flowerRowMapper());
+    public List<Flower> findByAutoSchedulingTrueAndUserId(String userId) {
+        String sql = "SELECT * FROM flowerdetails WHERE auto_scheduling = true AND user_id = ?";
+        return jdbc.query(sql, flowerRowMapper(), UUID.fromString(userId));
     }
 
-    public boolean deleteFlower(long id) {
-        String sql = "DELETE FROM flowerdetails WHERE flower_id = ?";
-        int rowsAffected = jdbc.update(sql, id);
+    public boolean deleteFlower(long id, String userId) {
+        String sql = "DELETE FROM flowerdetails WHERE flower_id = ? AND user_id = ?";
+        int rowsAffected = jdbc.update(sql, id, UUID.fromString(userId));
         if (rowsAffected == 0) {
             throw new FlowerNotFoundException(id);
         }
         return true;
     }
 
-    public long count() {
-        String sql = "SELECT COUNT(*) FROM flowerdetails";
-        Long count = jdbc.queryForObject(sql, Long.class);
+    public long countByUserId(String userId) {
+        String sql = "SELECT COUNT(*) FROM flowerdetails WHERE user_id = ?";
+        Long count = jdbc.queryForObject(sql, Long.class, UUID.fromString(userId));
         return count != null ? count : 0;
+    }
+
+    public List<Flower> findAllFlower() {
+        String sql = "SELECT * FROM flowerdetails";
+        return jdbc.query(sql, flowerRowMapper());
     }
 
     private Flower insert(Flower flower) {
@@ -101,8 +107,8 @@ public class FlowerRepository {
         (flower_name, species, color, planting_date, grid_position, 
          water_frequency_days, fertilize_frequency_days, prune_frequency_days,
          last_watered, last_fertilized, last_pruned_date, max_height, 
-         growth_rate, auto_scheduling) 
-        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         growth_rate, auto_scheduling, user_id) 
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """;
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
@@ -127,6 +133,9 @@ public class FlowerRepository {
             ps.setObject(13, flower.getGrowthRate(), java.sql.Types.DOUBLE);
             ps.setBoolean(14, flower.isAutoScheduling());
 
+            // User ID
+            ps.setObject(15, UUID.fromString(flower.getUserId()), java.sql.Types.OTHER);
+
             return ps;
         }, keyHolder);
 
@@ -149,8 +158,14 @@ public class FlowerRepository {
         savedFlower.setMaxHeight(flower.getMaxHeight());
         savedFlower.setGrowthRate(flower.getGrowthRate());
         savedFlower.setAutoScheduling(flower.isAutoScheduling());
+        savedFlower.setUserId(flower.getUserId());
 
         return savedFlower;
+    }
+
+    public List<Flower> findByAutoSchedulingTrue() {
+        String sql = "SELECT * FROM flowerdetails WHERE auto_scheduling = true";
+        return jdbc.query(sql, flowerRowMapper());
     }
 
     private void update(Flower flower) {
@@ -160,7 +175,7 @@ public class FlowerRepository {
             water_frequency_days = ?, fertilize_frequency_days = ?, prune_frequency_days = ?,
             last_watered = ?, last_fertilized = ?, last_pruned_date = ?, 
             max_height = ?, growth_rate = ?, auto_scheduling = ?
-        WHERE flower_id = ?
+        WHERE flower_id = ? AND user_id = ?
         """;
 
         jdbc.update(sql,
@@ -178,7 +193,8 @@ public class FlowerRepository {
                 flower.getMaxHeight(),
                 flower.getGrowthRate(),
                 flower.isAutoScheduling(),
-                flower.getFlower_id()
+                flower.getFlower_id(),
+                UUID.fromString(flower.getUserId())
         );
     }
 
@@ -223,6 +239,10 @@ public class FlowerRepository {
             flower.setGrowthRate(growthRate);
 
             flower.setAutoScheduling(rs.getBoolean("auto_scheduling"));
+
+            // Map user_id
+            UUID userIdUUID = (UUID) rs.getObject("user_id");
+            flower.setUserId(userIdUUID != null ? userIdUUID.toString() : null);
 
             return flower;
         };

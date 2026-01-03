@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 public class GrowthRepository {
@@ -44,66 +45,66 @@ public class GrowthRepository {
         }
     }
 
-    public Growth findByGrowthId(long id) {
-        String sql = "SELECT * FROM growthdetails WHERE growth_id = ?";
+    public Growth findByGrowthIdAndUserId(long id, String userId) {
+        String sql = "SELECT * FROM growthdetails WHERE growth_id = ? AND user_id = ?";
         try {
-            return jdbc.queryForObject(sql, growthRowMapper(), id);
+            return jdbc.queryForObject(sql, growthRowMapper(), id, UUID.fromString(userId));
         } catch (EmptyResultDataAccessException e) {
             throw new GrowthNotFoundException(id);
         }
     }
 
-    public List<Growth> findAllGrowth() {
-        String sql = "SELECT * FROM growthdetails ORDER BY recorded_at DESC";
-        return jdbc.query(sql, growthRowMapper());
+    public List<Growth> findAllGrowthByUserId(String userId) {
+        String sql = "SELECT * FROM growthdetails WHERE user_id = ? ORDER BY recorded_at DESC";
+        return jdbc.query(sql, growthRowMapper(), UUID.fromString(userId));
     }
 
     // Alias for JPA-style naming (used in integration tests)
-    public List<Growth> findAll() {
-        return findAllGrowth();
+    public List<Growth> findAllByUserId(String userId) {
+        return findAllGrowthByUserId(userId);
     }
 
-    public List<Growth> findByFlower_FlowerId(long flowerId) {
-        String sql = "SELECT * FROM growthdetails WHERE flower_id = ? ORDER BY recorded_at DESC";
-        return jdbc.query(sql, growthRowMapper(), flowerId);
+    public List<Growth> findByFlowerIdAndUserId(long flowerId, String userId) {
+        String sql = "SELECT * FROM growthdetails WHERE flower_id = ? AND user_id = ? ORDER BY recorded_at DESC";
+        return jdbc.query(sql, growthRowMapper(), flowerId, UUID.fromString(userId));
     }
 
     // Find all growth records for a specific flower, ordered by recorded date (newest first)
     // Used in integration tests
-    public List<Growth> findByFlowerOrderByRecordedAtDesc(Flower flower) {
-        return findByFlower_FlowerId(flower.getFlower_id());
+    public List<Growth> findByFlowerAndUserIdOrderByRecordedAtDesc(Flower flower, String userId) {
+        return findByFlowerIdAndUserId(flower.getFlower_id(), userId);
     }
 
     // Find the most recent growth record for a specific flower
     // Used in integration tests
-    public Optional<Growth> findTopByFlowerOrderByRecordedAtDesc(Flower flower) {
-        Growth latestGrowth = findLatestByFlowerId(flower.getFlower_id());
+    public Optional<Growth> findTopByFlowerAndUserIdOrderByRecordedAtDesc(Flower flower, String userId) {
+        Growth latestGrowth = findLatestByFlowerIdAndUserId(flower.getFlower_id(), userId);
         return Optional.ofNullable(latestGrowth);
     }
 
     // Find latest growth record for a specific flower (used by GrowthAutomationService)
-    public Growth findLatestByFlowerId(long flowerId) {
-        String sql = "SELECT * FROM growthdetails WHERE flower_id = ? ORDER BY recorded_at DESC LIMIT 1";
+    public Growth findLatestByFlowerIdAndUserId(long flowerId, String userId) {
+        String sql = "SELECT * FROM growthdetails WHERE flower_id = ? AND user_id = ? ORDER BY recorded_at DESC LIMIT 1";
         try {
-            return jdbc.queryForObject(sql, growthRowMapper(), flowerId);
+            return jdbc.queryForObject(sql, growthRowMapper(), flowerId, UUID.fromString(userId));
         } catch (EmptyResultDataAccessException e) {
             return null; // No growth record exists yet
         }
     }
 
-    public List<Growth> findByStage(GrowthStage stage) {
-        String sql = "SELECT * FROM growthdetails WHERE stage = ? ORDER BY recorded_at DESC";
-        return jdbc.query(sql, growthRowMapper(), stage.getGrowthStage());
+    public List<Growth> findByStageAndUserId(GrowthStage stage, String userId) {
+        String sql = "SELECT * FROM growthdetails WHERE stage = ? AND user_id = ? ORDER BY recorded_at DESC";
+        return jdbc.query(sql, growthRowMapper(), stage.getGrowthStage(), UUID.fromString(userId));
     }
 
-    public List<Growth> findByColorChanges(boolean colorChanges) {
-        String sql = "SELECT * FROM growthdetails WHERE color_changes = ? ORDER BY recorded_at DESC";
-        return jdbc.query(sql, growthRowMapper(), colorChanges);
+    public List<Growth> findByColorChangesAndUserId(boolean colorChanges, String userId) {
+        String sql = "SELECT * FROM growthdetails WHERE color_changes = ? AND user_id = ? ORDER BY recorded_at DESC";
+        return jdbc.query(sql, growthRowMapper(), colorChanges, UUID.fromString(userId));
     }
 
-    public void deleteGrowth(long id) {
-        String sql = "DELETE FROM growthdetails WHERE growth_id = ?";
-        int rowsAffected = jdbc.update(sql, id);
+    public void deleteGrowth(long id, String userId) {
+        String sql = "DELETE FROM growthdetails WHERE growth_id = ? AND user_id = ?";
+        int rowsAffected = jdbc.update(sql, id, UUID.fromString(userId));
         if (rowsAffected == 0) {
             throw new GrowthNotFoundException(id);
         }
@@ -111,20 +112,20 @@ public class GrowthRepository {
 
     // Delete a growth object (used in integration tests)
     public void delete(Growth growth) {
-        deleteGrowth(growth.getGrowth_id());
+        deleteGrowth(growth.getGrowth_id(), growth.getUserId());
     }
 
     // Delete all growth records for a specific flower
-    public void deleteByFlowerId(long flowerId) {
-        String sql = "DELETE FROM growthdetails WHERE flower_id = ?";
-        jdbc.update(sql, flowerId);
+    public void deleteByFlowerIdAndUserId(long flowerId, String userId) {
+        String sql = "DELETE FROM growthdetails WHERE flower_id = ? AND user_id = ?";
+        jdbc.update(sql, flowerId, UUID.fromString(userId));
     }
 
     private Growth insert(Growth growth) {
         String sql = """
         INSERT INTO growthdetails 
-        (flower_id, stage, height, color_changes, notes, recorded_at, growth_since_last) 
-        VALUES(?, ?, ?, ?, ?, ?, ?)
+        (flower_id, stage, height, color_changes, notes, recorded_at, growth_since_last, user_id) 
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?)
         """;
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
@@ -139,6 +140,7 @@ public class GrowthRepository {
             ps.setTimestamp(6, growth.getRecordedAt() != null ?
                     Timestamp.valueOf(growth.getRecordedAt()) : Timestamp.valueOf(LocalDateTime.now()));
             ps.setObject(7, growth.getGrowthSinceLast(), java.sql.Types.DOUBLE);
+            ps.setObject(8, UUID.fromString(growth.getUserId()), java.sql.Types.OTHER);
             return ps;
         }, keyHolder);
 
@@ -151,7 +153,7 @@ public class GrowthRepository {
         String sql = """
         UPDATE growthdetails 
         SET stage = ?, height = ?, color_changes = ?, notes = ?, recorded_at = ?, growth_since_last = ? 
-        WHERE growth_id = ?
+        WHERE growth_id = ? AND user_id = ?
         """;
 
         jdbc.update(sql,
@@ -161,7 +163,8 @@ public class GrowthRepository {
                 growth.getNotes(),
                 growth.getRecordedAt() != null ? Timestamp.valueOf(growth.getRecordedAt()) : null,
                 growth.getGrowthSinceLast(),
-                growth.getGrowth_id());
+                growth.getGrowth_id(),
+                UUID.fromString(growth.getUserId()));
     }
 
     private RowMapper<Growth> growthRowMapper() {
@@ -169,7 +172,13 @@ public class GrowthRepository {
             Growth growth = new Growth();
             growth.setGrowth_id(rs.getLong("growth_id"));
 
-            Flower flower = flowerRepository.findByFlowerId(rs.getLong("flower_id"));
+            // Get user_id first
+            UUID userIdUUID = (UUID) rs.getObject("user_id");
+            String userId = userIdUUID != null ? userIdUUID.toString() : null;
+            growth.setUserId(userId);
+
+            // Fetch flower with userId
+            Flower flower = flowerRepository.findByFlowerIdAndUserId(rs.getLong("flower_id"), userId);
             growth.setFlower(flower);
 
             String stageStr = rs.getString("stage");
