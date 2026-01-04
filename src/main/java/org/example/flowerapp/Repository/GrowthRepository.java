@@ -121,6 +121,11 @@ public class GrowthRepository {
         jdbc.update(sql, flowerId, UUID.fromString(userId));
     }
 
+    public Optional<Growth> findTopByFlowerOrderByRecordedAtDesc(Flower flower) {
+        String userId = flower.getUserId();
+        Growth latestGrowth = findLatestByFlowerIdAndUserId(flower.getFlower_id(), userId);
+        return Optional.ofNullable(latestGrowth);
+    }
     private Growth insert(Growth growth) {
         String sql = """
         INSERT INTO growthdetails 

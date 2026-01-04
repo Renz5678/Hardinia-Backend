@@ -48,7 +48,7 @@ class TaskSchedulerTest {
         testFlower.setLastWateredDate(LocalDateTime.now().minusDays(3)); // 3 days ago
 
         when(flowerRepository.findAllFlower()).thenReturn(List.of(testFlower));
-        when(maintenanceRepository.existsByFlowerAndTypeAndDateRange(anyLong(), any(), any(), any()))
+        when(maintenanceRepository.existsByFlowerAndTypeAndDateRange(anyLong(), any(), any(), any(), anyString()))
                 .thenReturn(false);
 
         // When
@@ -96,7 +96,7 @@ class TaskSchedulerTest {
         testFlower.setLastWateredDate(LocalDateTime.now().minusDays(3));
 
         when(flowerRepository.findAllFlower()).thenReturn(List.of(testFlower));
-        when(maintenanceRepository.existsByFlowerAndTypeAndDateRange(anyLong(), any(), any(), any()))
+        when(maintenanceRepository.existsByFlowerAndTypeAndDateRange(anyLong(), any(), any(), any(), anyString()))
                 .thenReturn(true); // Task already exists
 
         // When
@@ -127,7 +127,7 @@ class TaskSchedulerTest {
         Flower tulip = createFlowerWithWateringDue("Tulip");
 
         when(flowerRepository.findAllFlower()).thenReturn(Arrays.asList(rose, tulip));
-        when(maintenanceRepository.existsByFlowerAndTypeAndDateRange(anyLong(), any(), any(), any()))
+        when(maintenanceRepository.existsByFlowerAndTypeAndDateRange(anyLong(), any(), any(), any(), anyString()))
                 .thenReturn(false);
 
         // When
@@ -146,7 +146,7 @@ class TaskSchedulerTest {
         testFlower.setLastFertilizedDate(LocalDateTime.now().minusDays(15));
 
         when(flowerRepository.findAllFlower()).thenReturn(List.of(testFlower));
-        when(maintenanceRepository.existsByFlowerAndTypeAndDateRange(anyLong(), any(), any(), any()))
+        when(maintenanceRepository.existsByFlowerAndTypeAndDateRange(anyLong(), any(), any(), any(), anyString()))
                 .thenReturn(false);
 
         // When
