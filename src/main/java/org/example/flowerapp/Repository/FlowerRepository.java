@@ -240,9 +240,17 @@ public class FlowerRepository {
 
             flower.setAutoScheduling(rs.getBoolean("auto_scheduling"));
 
-            // Map user_id
-            UUID userIdUUID = (UUID) rs.getObject("user_id");
-            flower.setUserId(userIdUUID != null ? userIdUUID.toString() : null);
+            // Map user_id - Handle both UUID (PostgreSQL) and String (H2)
+            Object userIdObj = rs.getObject("user_id");
+            if (userIdObj instanceof UUID) {
+                flower.setUserId(((UUID) userIdObj).toString());
+            } else if (userIdObj instanceof String) {
+                flower.setUserId((String) userIdObj);
+            } else if (userIdObj != null) {
+                flower.setUserId(userIdObj.toString());
+            } else {
+                flower.setUserId(null);
+            }
 
             return flower;
         };

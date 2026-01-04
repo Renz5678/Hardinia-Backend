@@ -160,6 +160,40 @@ public class MaintenanceRepository {
         return count != null ? count : 0;
     }
 
+    public List<Maintenance> findByMaintenanceType(MaintenanceType maintenanceType) {
+        String sql = """
+        SELECT * 
+        FROM maintenance 
+        WHERE maintenance_type = ?
+        """;
+
+        return jdbc.query(sql, maintenanceRowMapper(), maintenanceType.name());
+    }
+
+    public boolean existsByFlowerAndMaintenanceTypeAndCompletedFalse(
+            Flower flower,
+            MaintenanceType maintenanceType) {
+
+        String sql = """
+        SELECT COUNT(*) 
+        FROM maintenance 
+        WHERE flower_id = ? 
+        AND maintenance_type = ? 
+        AND completed = false
+        AND user_id = ?
+        """;
+
+        Long count = jdbc.queryForObject(
+                sql,
+                Long.class,
+                flower.getFlower_id(),
+                maintenanceType.name(),
+                UUID.fromString(flower.getUserId())
+        );
+
+        return count != null && count > 0;
+    }
+
     private Maintenance insert(Maintenance maintenance) {
         String sql = """
         INSERT INTO maintenance 
@@ -216,9 +250,16 @@ public class MaintenanceRepository {
             Maintenance maintenance = new Maintenance();
             maintenance.setTask_id(rs.getLong("task_id"));
 
-            // Get user_id first
-            UUID userIdUUID = (UUID) rs.getObject("user_id");
-            String userId = userIdUUID != null ? userIdUUID.toString() : null;
+            // Get user_id - Handle both UUID (PostgreSQL) and String (H2)
+            String userId = null;
+            Object userIdObj = rs.getObject("user_id");
+            if (userIdObj instanceof UUID) {
+                userId = ((UUID) userIdObj).toString();
+            } else if (userIdObj instanceof String) {
+                userId = (String) userIdObj;
+            } else if (userIdObj != null) {
+                userId = userIdObj.toString();
+            }
             maintenance.setUserId(userId);
 
             // Fetch flower with userId
