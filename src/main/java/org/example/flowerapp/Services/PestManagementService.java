@@ -106,7 +106,7 @@ public class PestManagementService {
         pestTask.setScheduledDate(LocalDateTime.now());
         pestTask.setDueDate(LocalDateTime.now().plusDays(3)); // 3 days to treat pests
         pestTask.setCompleted(false);
-        pestTask.setNotes("Pest infestation detected! Treat with appropriate pesticide.");
+        pestTask.setNotes("Treat " + flower.getFlowerName() + " with pesticide");
         pestTask.setPerformedBy("System");
 
         maintenanceRepository.save(pestTask);
