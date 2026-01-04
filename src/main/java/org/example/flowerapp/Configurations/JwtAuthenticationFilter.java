@@ -22,6 +22,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private SupabaseJwtValidator jwtValidator;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        String path = request.getRequestURI();
+
+        // Skip JWT validation for health checks and public endpoints
+        return path.equals("/") ||
+                path.equals("/health") ||
+                path.startsWith("/actuator/health") ||
+                path.startsWith("/actuator/info") ||
+                path.startsWith("/swagger-ui") ||
+                path.startsWith("/v3/api-docs");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
