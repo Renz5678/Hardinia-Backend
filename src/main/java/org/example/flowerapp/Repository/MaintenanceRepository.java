@@ -132,6 +132,11 @@ public class MaintenanceRepository {
         return jdbc.query(sql, maintenanceRowMapper(), completed, UUID.fromString(userId));
     }
 
+    public List<Maintenance> findByCompletedStatus(boolean completed) {
+        String sql = "SELECT * FROM maintenance WHERE completed = ?";
+        return jdbc.query(sql, maintenanceRowMapper(), completed);
+    }
+
     public boolean existsByFlowerAndTypeAndCompleted(long flowerId, MaintenanceType type,
                                                      boolean completed, String userId) {
         String sql = """
@@ -270,7 +275,7 @@ public class MaintenanceRepository {
             Timestamp maintenanceTs = rs.getTimestamp("maintenance_date");
             maintenance.setScheduledDate(maintenanceTs != null ? maintenanceTs.toLocalDateTime() : null);
 
-            Timestamp dueDateTs = rs.getTimestamp("due_date");
+            Timestamp dueDateTs = rs.getTimestamp("maintenance_date");
             maintenance.setDueDate(dueDateTs != null ? dueDateTs.toLocalDateTime() : null);
 
             maintenance.setNotes(rs.getString("notes"));

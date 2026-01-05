@@ -44,7 +44,7 @@ public class PestManagementService {
     }
 
     // Run daily at 3 AM to check for pest infestations
-    @Scheduled(cron = "0 0 3 * * *")
+    @Scheduled(cron = "0 0 6 * * *")
     @Transactional
     public void checkForPestInfestations() {
         log.info("Starting daily pest infestation check...");
