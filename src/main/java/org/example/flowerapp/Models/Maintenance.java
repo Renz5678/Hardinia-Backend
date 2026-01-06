@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.example.flowerapp.Models.Enums.MaintenanceType;
 
 import java.time.LocalDateTime;
+import java.util.Date;
 
 @Entity
 @Table(name="maintenance")
