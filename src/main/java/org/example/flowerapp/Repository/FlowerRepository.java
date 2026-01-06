@@ -15,6 +15,7 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -99,6 +100,17 @@ public class FlowerRepository {
     public List<Flower> findAllFlower() {
         String sql = "SELECT * FROM flowerdetails";
         return jdbc.query(sql, flowerRowMapper());
+    }
+
+    public Optional<Flower> findByFlowerIdAndUserId(Long flowerId, String userId) {
+        String sql = "SELECT * FROM flowerdetails WHERE flower_id = ? AND user_id = ?";
+
+        try {
+            Flower flower = jdbc.queryForObject(sql, new Object[]{flowerId, userId}, flowerRowMapper());
+            return Optional.of(flower);
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
     }
 
     private Flower insert(Flower flower) {

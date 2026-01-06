@@ -8,7 +8,8 @@ public enum GrowthStage {
     SEEDLING("Seedling"),
     BUDDING("Budding"),
     WILTING("Wilting"),
-    BLOOMING("Blooming");
+    BLOOMING("Blooming"),
+    DEAD("Dead");
 
     private final String growthStage;
 

@@ -126,6 +126,21 @@ public class GrowthRepository {
         Growth latestGrowth = findLatestByFlowerIdAndUserId(flower.getFlower_id(), userId);
         return Optional.ofNullable(latestGrowth);
     }
+
+    public Growth findLatestByFlowerId(Long flowerId) {
+        String sql = "SELECT * FROM growthdetails WHERE flower_id = ? ORDER BY recorded_at DESC LIMIT 1";
+        try {
+            return jdbc.queryForObject(sql, growthRowMapper(), flowerId);
+        } catch (EmptyResultDataAccessException e) {
+            return null;
+        }
+    }
+
+    public List<Growth> findByFlowerId(Long flowerId) {
+        String sql = "SELECT * FROM growthdetails WHERE flower_id = ? ORDER BY recorded_at DESC";
+        return jdbc.query(sql, growthRowMapper(), flowerId);
+    }
+
     private Growth insert(Growth growth) {
         String sql = """
         INSERT INTO growthdetails 
@@ -178,8 +193,17 @@ public class GrowthRepository {
             growth.setGrowth_id(rs.getLong("growth_id"));
 
             // Get user_id first
-            UUID userIdUUID = (UUID) rs.getObject("user_id");
-            String userId = userIdUUID != null ? userIdUUID.toString() : null;
+            Object userIdObj = rs.getObject("user_id");
+            String userId;
+            if (userIdObj instanceof UUID) {
+                userId = ((UUID) userIdObj).toString();
+            } else if (userIdObj instanceof String) {
+                userId = (String) userIdObj;
+            } else if (userIdObj != null) {
+                userId = userIdObj.toString();
+            } else {
+                userId = null;
+            }
             growth.setUserId(userId);
 
             // Fetch flower with userId
