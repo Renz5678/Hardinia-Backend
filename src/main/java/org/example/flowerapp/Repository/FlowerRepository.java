@@ -44,6 +44,12 @@ public class FlowerRepository {
         }
     }
 
+    public boolean existsById(long flowerId) {
+        String sql = "SELECT COUNT(*) FROM flowerdetails WHERE flower_id = ?";
+        Integer count = jdbc.queryForObject(sql, Integer.class, flowerId);
+        return count != null && count > 0;
+    }
+
     public boolean existsByNameAndUserId(String flowerName, String userId) {
         String sql = "SELECT COUNT(*) FROM flowerdetails WHERE flower_name = ? AND user_id = ?";
         Integer count = jdbc.queryForObject(sql, Integer.class, flowerName, UUID.fromString(userId));

@@ -29,16 +29,29 @@ public class MaintenanceReminderService {
      * Scheduled task that runs daily at 8:00 AM
      * Checks for tasks due today and sends email reminders
      */
-    @Scheduled(cron = "0 0 8 * * *") // Runs at 8:00 AM every day
+    @Scheduled(cron = "0 45 8 * * *") // Runs at 8:00 AM every day
     public void sendDailyMaintenanceReminders() {
         logger.info("Starting daily maintenance reminder job");
 
         try {
-            // Get all incomplete tasks
-            List<Maintenance> allIncompleteTasks = maintenanceRepository.findByCompletedStatus(false);
+            // Get all incomplete tasks EXCLUDING dead flowers
+            List<Maintenance> allIncompleteTasks = maintenanceRepository
+                    .findByCompletedStatusExcludingDead(false);
+
+            logger.info("Found {} incomplete tasks (excluding dead flowers)", allIncompleteTasks.size());
+
+            // Filter out any tasks with null userId (defensive programming)
+            List<Maintenance> validTasks = allIncompleteTasks.stream()
+                    .filter(task -> task.getUserId() != null)
+                    .collect(Collectors.toList());
+
+            if (validTasks.size() < allIncompleteTasks.size()) {
+                logger.warn("Filtered out {} tasks with null userId",
+                        allIncompleteTasks.size() - validTasks.size());
+            }
 
             // Group tasks by userId
-            Map<String, List<Maintenance>> tasksByUser = allIncompleteTasks.stream()
+            Map<String, List<Maintenance>> tasksByUser = validTasks.stream()
                     .collect(Collectors.groupingBy(Maintenance::getUserId));
 
             logger.info("Found {} users with incomplete tasks", tasksByUser.size());
@@ -89,27 +102,30 @@ public class MaintenanceReminderService {
      * Manual trigger for testing or on-demand reminders for a specific user
      */
     public void sendRemindersForUser(String userId) {
-        logger.info("=== DEBUG: Starting sendRemindersForUser for userId: {} ===", userId);
+        logger.info("=== Starting sendRemindersForUser for userId: {} ===", userId);
 
         try {
             LocalDateTime now = LocalDateTime.now();
             LocalDateTime startOfDay = now.withHour(0).withMinute(0).withSecond(0).withNano(0);
             LocalDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
 
-            logger.info("DEBUG: Current time: {}", now);
-            logger.info("DEBUG: Start of day: {}", startOfDay);
-            logger.info("DEBUG: End of day: {}", endOfDay);
+            logger.info("Current time: {}", now);
+            logger.info("Time range: {} to {}", startOfDay, endOfDay);
 
-            // Get all incomplete tasks for the user
+            // Get all incomplete tasks for the user EXCLUDING dead flowers
             List<Maintenance> incompleteTasks = maintenanceRepository
-                    .findByCompletedStatusAndUserId(false, userId);
+                    .findByCompletedStatusAndUserIdExcludingDead(false, userId);
 
-            logger.info("DEBUG: Found {} incomplete tasks for user", incompleteTasks.size());
+            logger.info("Found {} incomplete tasks for user (excluding dead flowers)",
+                    incompleteTasks.size());
 
             // Log each task's details
             for (Maintenance task : incompleteTasks) {
-                logger.info("DEBUG: Task ID: {}, Due Date: {}, Completed: {}",
-                        task.getTask_id(), task.getDueDate(), task.isCompleted());
+                logger.debug("Task ID: {}, Flower: {}, Due Date: {}, Completed: {}",
+                        task.getTask_id(),
+                        task.getFlower() != null ? task.getFlower().getFlowerName() : "Unknown",
+                        task.getDueDate(),
+                        task.isCompleted());
             }
 
             // Filter tasks that are due today
@@ -121,7 +137,7 @@ public class MaintenanceReminderService {
                                 !dueDate.isAfter(endOfDay);
 
                         if (dueDate != null) {
-                            logger.info("DEBUG: Task {} - Due: {}, Is due today: {}",
+                            logger.debug("Task {} - Due: {}, Is due today: {}",
                                     task.getTask_id(), dueDate, isDueToday);
                         }
 
@@ -129,20 +145,19 @@ public class MaintenanceReminderService {
                     })
                     .collect(Collectors.toList());
 
-            logger.info("DEBUG: {} tasks due today", tasksDueToday.size());
+            logger.info("{} tasks due today for user", tasksDueToday.size());
 
             if (!tasksDueToday.isEmpty()) {
-                logger.info("DEBUG: Attempting to send email to userId: {}", userId);
+                logger.info("Attempting to send email to userId: {}", userId);
                 emailService.sendMaintenanceReminder(userId, tasksDueToday);
-                logger.info("DEBUG: Email sent successfully to user: {} for {} tasks",
+                logger.info("Email sent successfully to user: {} for {} tasks",
                         userId, tasksDueToday.size());
             } else {
-                logger.info("DEBUG: No tasks due today for user: {}", userId);
+                logger.info("No tasks due today for user: {}", userId);
             }
 
         } catch (Exception e) {
-            logger.error("DEBUG ERROR: Error sending reminder to user: {}", userId, e);
-            e.printStackTrace();
+            logger.error("Error sending reminder to user: {}", userId, e);
         }
     }
 
@@ -155,7 +170,7 @@ public class MaintenanceReminderService {
         LocalDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
 
         List<Maintenance> incompleteTasks = maintenanceRepository
-                .findByCompletedStatusAndUserId(false, userId);
+                .findByCompletedStatusAndUserIdExcludingDead(false, userId);
 
         return incompleteTasks.stream()
                 .anyMatch(task -> {
@@ -175,7 +190,7 @@ public class MaintenanceReminderService {
         LocalDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
 
         List<Maintenance> incompleteTasks = maintenanceRepository
-                .findByCompletedStatusAndUserId(false, userId);
+                .findByCompletedStatusAndUserIdExcludingDead(false, userId);
 
         return (int) incompleteTasks.stream()
                 .filter(task -> {

@@ -21,10 +21,7 @@ import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Repository
 public class GrowthRepository {
@@ -80,6 +77,16 @@ public class GrowthRepository {
     public Optional<Growth> findTopByFlowerAndUserIdOrderByRecordedAtDesc(Flower flower, String userId) {
         Growth latestGrowth = findLatestByFlowerIdAndUserId(flower.getFlower_id(), userId);
         return Optional.ofNullable(latestGrowth);
+    }
+
+    public List<Growth> findAll() {
+        String sql = "SELECT * FROM growthdetails";
+
+        try {
+            return jdbc.query(sql, growthRowMapper());
+        } catch (EmptyResultDataAccessException e) {
+            return new ArrayList<>();
+        }
     }
 
     // Find latest growth record for a specific flower (used by GrowthAutomationService)

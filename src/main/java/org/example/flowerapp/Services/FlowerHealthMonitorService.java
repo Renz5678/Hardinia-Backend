@@ -99,6 +99,133 @@ public class FlowerHealthMonitorService {
         }
     }
 
+    /**
+     * Cleans up orphaned maintenance tasks and growth records for non-existent flowers.
+     * This method should be called periodically or manually to maintain data integrity.
+     */
+    @Transactional
+    public void cleanupOrphanedRecords() {
+        log.info("=== Starting orphaned records cleanup at {} ===",
+                LocalDateTime.now().format(DATE_FORMATTER));
+
+        try {
+            int maintenanceDeleted = 0;
+            int growthDeleted = 0;
+
+            // Get all maintenance records
+            List<Maintenance> allMaintenance = maintenanceRepository.findAll();
+            log.info("Checking {} maintenance records for orphans", allMaintenance.size());
+
+            for (Maintenance maintenance : allMaintenance) {
+                try {
+                    Long flowerId = maintenance.getFlower().getFlower_id();
+                    String userId = maintenance.getUserId();
+
+                    // Check if flower exists
+                    boolean flowerExists = flowerRepository
+                            .findByFlowerIdAndUserId(flowerId, userId)
+                            .isPresent();
+
+                    if (!flowerExists) {
+                        maintenanceRepository.delete(maintenance);
+                        maintenanceDeleted++;
+                        log.info("  ✓ Deleted orphaned maintenance task {} for non-existent flower ID: {}",
+                                maintenance.getTask_id(), flowerId);
+                    }
+                } catch (Exception e) {
+                    log.error("  ✗ Error checking maintenance record {}: {}",
+                            maintenance.getTask_id(), e.getMessage());
+                }
+            }
+
+            // Get all growth records
+            List<Growth> allGrowth = growthRepository.findAll();
+            log.info("Checking {} growth records for orphans", allGrowth.size());
+
+            for (Growth growth : allGrowth) {
+                try {
+                    Long flowerId = growth.getFlower().getFlower_id();
+                    String userId = growth.getUserId();
+
+                    // Check if flower exists
+                    boolean flowerExists = flowerRepository
+                            .findByFlowerIdAndUserId(flowerId, userId)
+                            .isPresent();
+
+                    if (!flowerExists) {
+                        growthRepository.delete(growth);
+                        growthDeleted++;
+                        log.info("  ✓ Deleted orphaned growth record {} for non-existent flower ID: {}",
+                                growth.getGrowth_id(), flowerId);
+                    }
+                } catch (Exception e) {
+                    log.error("  ✗ Error checking growth record {}: {}",
+                            growth.getGrowth_id(), e.getMessage());
+                }
+            }
+
+            log.info("=== Completed orphaned records cleanup. Deleted {} maintenance tasks and {} growth records ===",
+                    maintenanceDeleted, growthDeleted);
+
+        } catch (Exception e) {
+            log.error("Error during orphaned records cleanup", e);
+            throw e;
+        }
+    }
+
+    /**
+     * Cleans up orphaned records for a specific flower ID.
+     * Useful when a flower has been deleted but related records remain.
+     */
+    @Transactional
+    public void cleanupOrphanedRecordsByFlowerId(Long flowerId) {
+        log.info("=== Starting orphaned records cleanup for flower ID: {} ===", flowerId);
+
+        try {
+            int maintenanceDeleted = 0;
+            int growthDeleted = 0;
+
+            // Check if flower exists
+            boolean flowerExists = flowerRepository.existsById(flowerId);
+
+            if (flowerExists) {
+                log.warn("Flower ID {} exists in database. No cleanup needed.", flowerId);
+                return;
+            }
+
+            // Delete maintenance records
+            List<Maintenance> maintenanceRecords = maintenanceRepository.findByFlowerId(flowerId);
+            for (Maintenance maintenance : maintenanceRecords) {
+                maintenanceRepository.delete(maintenance);
+                maintenanceDeleted++;
+            }
+
+            // Delete growth records
+            List<Growth> growthRecords = growthRepository.findByFlowerId(flowerId);
+            for (Growth growth : growthRecords) {
+                growthRepository.delete(growth);
+                growthDeleted++;
+            }
+
+            log.info("=== Completed cleanup for flower ID: {}. Deleted {} maintenance tasks and {} growth records ===",
+                    flowerId, maintenanceDeleted, growthDeleted);
+
+        } catch (Exception e) {
+            log.error("Error during cleanup for flower ID: {}", flowerId, e);
+            throw e;
+        }
+    }
+
+    /**
+     * Scheduled cleanup job that runs daily at 2 AM to remove orphaned records
+     */
+    @Scheduled(cron = "0 0 2 * * *") // Run daily at 2 AM
+    @Transactional
+    public void scheduledOrphanedRecordsCleanup() {
+        log.info("Running scheduled orphaned records cleanup");
+        cleanupOrphanedRecords();
+    }
+
     private int getMaxOverdueDays(Flower flower, LocalDateTime now) {
         List<Maintenance> incompleteTasks = maintenanceRepository
                 .findIncompleteByFlowerIdAndUserId(flower.getFlower_id(), flower.getUserId());

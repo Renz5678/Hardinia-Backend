@@ -1,8 +1,10 @@
 package org.example.flowerapp.Repository;
 
+import com.sun.tools.javac.Main;
 import org.example.flowerapp.Exceptions.EntityNotFoundExceptions.MaintenanceNotFoundException;
 import org.example.flowerapp.Models.Enums.MaintenanceType;
 import org.example.flowerapp.Models.Flower;
+import org.example.flowerapp.Models.Growth;
 import org.example.flowerapp.Models.Maintenance;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,6 +17,7 @@ import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -47,6 +50,16 @@ public class MaintenanceRepository {
         }
     }
 
+    public List<Maintenance> findAll() {
+        String sql = "SELECT * FROM maintenance";
+
+        try {
+            return jdbc.query(sql, maintenanceRowMapper());
+        } catch (EmptyResultDataAccessException e) {
+            return new ArrayList<>();
+        }
+    }
+
     public List<Maintenance> findAllMaintenanceByUserId(String userId) {
         String sql = "SELECT * FROM maintenance WHERE user_id = ?::uuid";
         try {
@@ -57,6 +70,16 @@ public class MaintenanceRepository {
             System.err.println("Error querying maintenance: " + e.getMessage());
             e.printStackTrace();
             throw e;
+        }
+    }
+
+    public List<Maintenance> findByFlowerId(Long flowerId) {
+        String sql = "SELECT * FROM maintenance WHERE flower_id = ?";
+
+        try {
+            return jdbc.query(sql, maintenanceRowMapper(), flowerId);
+        } catch (EmptyResultDataAccessException e) {
+            return new ArrayList<>();
         }
     }
 
@@ -104,6 +127,11 @@ public class MaintenanceRepository {
     public boolean deleteMaintenance(long id, String userId) {
         String sql = "DELETE FROM maintenance WHERE task_id = ? AND user_id = ?::uuid";
         return jdbc.update(sql, id, userId) != 0;
+    }
+
+    public void delete(Maintenance maintenance) {
+        String sql = "DELETE FROM maintenance WHERE task_id = ?";
+        jdbc.update(sql, maintenance.getTask_id());
     }
 
     public boolean existsByFlowerAndTypeAndDateRange(long flowerId, MaintenanceType type,
@@ -195,6 +223,85 @@ public class MaintenanceRepository {
         );
 
         return count != null && count > 0;
+    }
+
+    public List<Maintenance> findByCompletedStatusExcludingDead(boolean completed) {
+        String sql = """
+        SELECT m.* FROM maintenance m
+        WHERE m.completed = ?
+        AND m.flower_id NOT IN (
+            SELECT g.flower_id 
+            FROM growth g
+            WHERE g.recorded_at = (
+                SELECT MAX(g2.recorded_at) 
+                FROM growth g2 
+                WHERE g2.flower_id = g.flower_id
+            )
+            AND g.stage = 'DEAD'
+        )
+        """;
+
+        try {
+            return jdbc.query(sql, maintenanceRowMapper(), completed);
+        } catch (EmptyResultDataAccessException e) {
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Find incomplete maintenance tasks for a specific user excluding those for dead flowers
+     */
+    public List<Maintenance> findByCompletedStatusAndUserIdExcludingDead(boolean completed, String userId) {
+        String sql = """
+        SELECT m.* FROM maintenance m
+        WHERE m.completed = ? 
+        AND m.user_id = ?::uuid
+        AND m.flower_id NOT IN (
+            SELECT g.flower_id 
+            FROM growth g
+            WHERE g.recorded_at = (
+                SELECT MAX(g2.recorded_at) 
+                FROM growth g2 
+                WHERE g2.flower_id = g.flower_id
+            )
+            AND g.stage = 'DEAD'
+        )
+        """;
+
+        try {
+            return jdbc.query(sql, maintenanceRowMapper(), completed, userId);
+        } catch (EmptyResultDataAccessException e) {
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Find incomplete maintenance tasks for a specific flower excluding dead status
+     * (Optional - useful for consistency)
+     */
+    public List<Maintenance> findIncompleteByFlowerIdAndUserIdExcludingDead(long flowerId, String userId) {
+        String sql = """
+        SELECT m.* FROM maintenance m
+        WHERE m.flower_id = ? 
+        AND m.user_id = ?::uuid 
+        AND m.completed = false
+        AND m.flower_id NOT IN (
+            SELECT g.flower_id 
+            FROM growth g
+            WHERE g.recorded_at = (
+                SELECT MAX(g2.recorded_at) 
+                FROM growth g2 
+                WHERE g2.flower_id = g.flower_id
+            )
+            AND g.stage = 'DEAD'
+        )
+        """;
+
+        try {
+            return jdbc.query(sql, maintenanceRowMapper(), flowerId, userId);
+        } catch (EmptyResultDataAccessException e) {
+            return new ArrayList<>();
+        }
     }
 
     private Maintenance insert(Maintenance maintenance) {
