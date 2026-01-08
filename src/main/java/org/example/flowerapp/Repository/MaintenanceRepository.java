@@ -206,20 +206,21 @@ public class MaintenanceRepository {
             MaintenanceType maintenanceType) {
 
         String sql = """
-        SELECT COUNT(*) 
-        FROM maintenance 
-        WHERE flower_id = ? 
-        AND maintenance_type = ? 
-        AND completed = false
-        AND user_id = ?::uuid
-        """;
+    SELECT COUNT(*) 
+    FROM maintenance 
+    WHERE flower_id = ? 
+    AND user_id = ?::uuid
+    AND maintenance_type = ? 
+    AND completed = false
+    """;
 
+        // IMPORTANT: Parameter order must match the ? placeholders in the SQL
         Long count = jdbc.queryForObject(
                 sql,
                 Long.class,
-                flower.getFlower_id(),
-                maintenanceType.name(),
-                flower.getUserId()
+                flower.getFlower_id(),      // 1st ? - flower_id
+                flower.getUserId(),          // 2nd ? - user_id
+                maintenanceType.name()       // 3rd ? - maintenance_type
         );
 
         return count != null && count > 0;

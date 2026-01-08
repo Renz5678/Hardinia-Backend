@@ -22,6 +22,7 @@ public class PestManagementService {
 
     private final FlowerRepository flowerRepository;
     private final MaintenanceRepository maintenanceRepository;
+    private final EmailService emailService;
     private final Random random;
 
     // 30% chance for pest infestation
@@ -30,26 +31,28 @@ public class PestManagementService {
     // Constructor for production use
     @Autowired
     public PestManagementService(FlowerRepository flowerRepository,
-                                 MaintenanceRepository maintenanceRepository) {
-        this(flowerRepository, maintenanceRepository, new Random());
+                                 MaintenanceRepository maintenanceRepository,
+                                 EmailService emailService) {
+        this(flowerRepository, maintenanceRepository, emailService, new Random());
     }
 
     // Constructor for testing with injectable Random
     public PestManagementService(FlowerRepository flowerRepository,
                                  MaintenanceRepository maintenanceRepository,
+                                 EmailService emailService,
                                  Random random) {
         this.flowerRepository = flowerRepository;
         this.maintenanceRepository = maintenanceRepository;
+        this.emailService = emailService;
         this.random = random;
     }
 
-    // Run daily at 3 AM to check for pest infestations
+    // Run daily at 6 AM to check for pest infestations
     @Scheduled(cron = "0 0 6 * * *")
     @Transactional
     public void checkForPestInfestations() {
         log.info("Starting daily pest infestation check...");
 
-        // Get all active flowers (you can add additional filtering if needed)
         List<Flower> allFlowers = flowerRepository.findAllFlower();
         int infestationCount = 0;
 
@@ -95,7 +98,7 @@ public class PestManagementService {
 
     /**
      * Creates a pest control maintenance task for the given flower
-     * This is called internally by the scheduled job (no auth needed)
+     * and sends an email alert to the user
      */
     private void createPestControlTask(Flower flower) {
         Maintenance pestTask = new Maintenance();
@@ -113,6 +116,17 @@ public class PestManagementService {
 
         log.info("Created pest control task for flower ID {} ({})",
                 flower.getFlower_id(), flower.getFlowerName());
+
+        // Send email alert to user
+        try {
+            emailService.sendPestInfestationAlert(flower.getUserId(), flower);
+            log.info("Sent pest infestation email to user {} for flower {}",
+                    flower.getUserId(), flower.getFlowerName());
+        } catch (Exception e) {
+            log.error("Failed to send pest infestation email for flower ID {}: {}",
+                    flower.getFlower_id(), e.getMessage());
+            // Don't fail the entire operation if email fails
+        }
     }
 
     /**

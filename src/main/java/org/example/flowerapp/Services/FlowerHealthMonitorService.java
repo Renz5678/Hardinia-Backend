@@ -11,6 +11,7 @@ import org.example.flowerapp.Repository.GrowthRepository;
 import org.example.flowerapp.Repository.MaintenanceRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -39,7 +40,6 @@ public class FlowerHealthMonitorService {
     }
 
     @Scheduled(cron = "0 0 * * * *") // Run every hour
-    @Transactional
     public void monitorFlowerHealth() {
         log.info("=== Starting flower health monitoring at {} ===",
                 LocalDateTime.now().format(DATE_FORMATTER));
@@ -53,46 +53,24 @@ public class FlowerHealthMonitorService {
                 return;
             }
 
-            LocalDateTime now = LocalDateTime.now();
             int flowersUpdated = 0;
+            int flowersErrored = 0;
 
             for (Flower flower : flowers) {
                 try {
-                    log.debug("Monitoring flower: {} (ID: {})", flower.getFlowerName(), flower.getFlower_id());
-
-                    // Query growth repository directly instead of using flower.getLatestGrowth()
-                    Growth currentGrowth = growthRepository.findLatestByFlowerId(flower.getFlower_id());
-                    if (currentGrowth == null) {
-                        log.debug("  No growth record found, skipping health check");
-                        continue;
-                    }
-
-                    GrowthStage currentStage = currentGrowth.getStage();
-                    log.debug("  Current stage: {}", currentStage);
-
-                    // Skip if already dead
-                    if (currentStage == GrowthStage.DEAD) {
-                        log.debug("  Flower is already DEAD, skipping");
-                        continue;
-                    }
-
-                    // Check for overdue tasks
-                    int maxOverdueDays = getMaxOverdueDays(flower, now);
-                    log.debug("  Max overdue days: {}", maxOverdueDays);
-
-                    GrowthStage newStage = determineNewStage(currentStage, maxOverdueDays);
-
-                    if (newStage != currentStage) {
-                        updateFlowerStage(flower, newStage, maxOverdueDays, now, currentGrowth);
-                        flowersUpdated++;
-                    }
+                    // Process each flower in its own transaction
+                    processFlowerHealth(flower);
+                    flowersUpdated++;
                 } catch (Exception e) {
-                    log.error("Error processing flower ID: {}", flower.getFlower_id(), e);
-                    // Continue with next flower instead of failing entire batch
+                    flowersErrored++;
+                    log.error("Error processing flower ID: {} - {}",
+                            flower.getFlower_id(), e.getMessage());
+                    // Continue with next flower
                 }
             }
 
-            log.info("=== Completed flower health monitoring. Updated {} flowers ===", flowersUpdated);
+            log.info("=== Completed flower health monitoring. Updated {} flowers, {} errors ===",
+                    flowersUpdated, flowersErrored);
         } catch (Exception e) {
             log.error("Error during flower health monitoring", e);
             throw e;
@@ -100,17 +78,56 @@ public class FlowerHealthMonitorService {
     }
 
     /**
-     * Cleans up orphaned maintenance tasks and growth records for non-existent flowers.
-     * This method should be called periodically or manually to maintain data integrity.
+     * Process health check for a single flower in its own transaction.
+     * Using REQUIRES_NEW ensures each flower gets its own transaction,
+     * so failures don't cascade to other flowers.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void processFlowerHealth(Flower flower) {
+        LocalDateTime now = LocalDateTime.now();
+
+        log.debug("Monitoring flower: {} (ID: {})", flower.getFlowerName(), flower.getFlower_id());
+
+        // Query growth repository directly
+        Growth currentGrowth = growthRepository.findLatestByFlowerId(flower.getFlower_id());
+        if (currentGrowth == null) {
+            log.debug("  No growth record found, skipping health check");
+            return;
+        }
+
+        GrowthStage currentStage = currentGrowth.getStage();
+        log.debug("  Current stage: {}", currentStage);
+
+        // Skip if already dead
+        if (currentStage == GrowthStage.DEAD) {
+            log.debug("  Flower is already DEAD, skipping");
+            return;
+        }
+
+        // Check for overdue tasks
+        int maxOverdueDays = getMaxOverdueDays(flower, now);
+        log.debug("  Max overdue days: {}", maxOverdueDays);
+
+        GrowthStage newStage = determineNewStage(currentStage, maxOverdueDays);
+
+        if (newStage != currentStage) {
+            updateFlowerStage(flower, newStage, maxOverdueDays, now, currentGrowth);
+        }
+    }
+
+    /**
+     * Cleans up orphaned maintenance tasks and growth records for non-existent flowers.
+     * This deletes records that reference flower IDs that no longer exist in the database.
+     */
     public void cleanupOrphanedRecords() {
         log.info("=== Starting orphaned records cleanup at {} ===",
                 LocalDateTime.now().format(DATE_FORMATTER));
 
         try {
             int maintenanceDeleted = 0;
+            int maintenanceSkipped = 0;
             int growthDeleted = 0;
+            int growthSkipped = 0;
 
             // Get all maintenance records
             List<Maintenance> allMaintenance = maintenanceRepository.findAll();
@@ -118,23 +135,17 @@ public class FlowerHealthMonitorService {
 
             for (Maintenance maintenance : allMaintenance) {
                 try {
-                    Long flowerId = maintenance.getFlower().getFlower_id();
-                    String userId = maintenance.getUserId();
-
-                    // Check if flower exists
-                    boolean flowerExists = flowerRepository
-                            .findByFlowerIdAndUserId(flowerId, userId)
-                            .isPresent();
-
-                    if (!flowerExists) {
-                        maintenanceRepository.delete(maintenance);
+                    // Process each cleanup in its own transaction
+                    boolean deleted = cleanupMaintenanceRecord(maintenance);
+                    if (deleted) {
                         maintenanceDeleted++;
-                        log.info("  ✓ Deleted orphaned maintenance task {} for non-existent flower ID: {}",
-                                maintenance.getTask_id(), flowerId);
+                    } else {
+                        maintenanceSkipped++;
                     }
                 } catch (Exception e) {
                     log.error("  ✗ Error checking maintenance record {}: {}",
                             maintenance.getTask_id(), e.getMessage());
+                    maintenanceSkipped++;
                 }
             }
 
@@ -144,28 +155,23 @@ public class FlowerHealthMonitorService {
 
             for (Growth growth : allGrowth) {
                 try {
-                    Long flowerId = growth.getFlower().getFlower_id();
-                    String userId = growth.getUserId();
-
-                    // Check if flower exists
-                    boolean flowerExists = flowerRepository
-                            .findByFlowerIdAndUserId(flowerId, userId)
-                            .isPresent();
-
-                    if (!flowerExists) {
-                        growthRepository.delete(growth);
+                    // Process each cleanup in its own transaction
+                    boolean deleted = cleanupGrowthRecord(growth);
+                    if (deleted) {
                         growthDeleted++;
-                        log.info("  ✓ Deleted orphaned growth record {} for non-existent flower ID: {}",
-                                growth.getGrowth_id(), flowerId);
+                    } else {
+                        growthSkipped++;
                     }
                 } catch (Exception e) {
                     log.error("  ✗ Error checking growth record {}: {}",
                             growth.getGrowth_id(), e.getMessage());
+                    growthSkipped++;
                 }
             }
 
-            log.info("=== Completed orphaned records cleanup. Deleted {} maintenance tasks and {} growth records ===",
-                    maintenanceDeleted, growthDeleted);
+            log.info("=== Completed orphaned records cleanup ===");
+            log.info("Maintenance: {} deleted, {} skipped/kept", maintenanceDeleted, maintenanceSkipped);
+            log.info("Growth: {} deleted, {} skipped/kept", growthDeleted, growthSkipped);
 
         } catch (Exception e) {
             log.error("Error during orphaned records cleanup", e);
@@ -174,8 +180,71 @@ public class FlowerHealthMonitorService {
     }
 
     /**
+     * Checks and deletes a maintenance record if its flower no longer exists.
+     * Returns true if deleted, false if kept.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    protected boolean cleanupMaintenanceRecord(Maintenance maintenance) {
+        try {
+            Long flowerId = maintenance.getFlower().getFlower_id();
+
+            // Check if ANY flower with this ID exists (regardless of user)
+            boolean flowerExists = flowerRepository.existsById(flowerId);
+
+            if (!flowerExists) {
+                // Flower doesn't exist at all - delete the orphaned maintenance record
+                maintenanceRepository.delete(maintenance);
+                log.info("  ✓ Deleted orphaned maintenance task {} for non-existent flower ID: {}",
+                        maintenance.getTask_id(), flowerId);
+                return true;
+            } else {
+                // Flower exists - keep the record
+                log.debug("  ○ Maintenance task {} for flower ID {} - flower exists, keeping record",
+                        maintenance.getTask_id(), flowerId);
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("  ✗ Error processing maintenance record {}: {}",
+                    maintenance.getTask_id(), e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Checks and deletes a growth record if its flower no longer exists.
+     * Returns true if deleted, false if kept.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    protected boolean cleanupGrowthRecord(Growth growth) {
+        try {
+            Long flowerId = growth.getFlower().getFlower_id();
+
+            // Check if ANY flower with this ID exists (regardless of user)
+            boolean flowerExists = flowerRepository.existsById(flowerId);
+
+            if (!flowerExists) {
+                // Flower doesn't exist at all - delete the orphaned growth record
+                growthRepository.delete(growth);
+                log.info("  ✓ Deleted orphaned growth record {} for non-existent flower ID: {}",
+                        growth.getGrowth_id(), flowerId);
+                return true;
+            } else {
+                // Flower exists - keep the record
+                log.debug("  ○ Growth record {} for flower ID {} - flower exists, keeping record",
+                        growth.getGrowth_id(), flowerId);
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("  ✗ Error processing growth record {}: {}",
+                    growth.getGrowth_id(), e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Cleans up orphaned records for a specific flower ID.
      * Useful when a flower has been deleted but related records remain.
+     * This will delete ALL maintenance and growth records for the specified flower ID.
      */
     @Transactional
     public void cleanupOrphanedRecordsByFlowerId(Long flowerId) {
@@ -193,11 +262,14 @@ public class FlowerHealthMonitorService {
                 return;
             }
 
+            log.info("Flower ID {} does not exist. Cleaning up orphaned records...", flowerId);
+
             // Delete maintenance records
             List<Maintenance> maintenanceRecords = maintenanceRepository.findByFlowerId(flowerId);
             for (Maintenance maintenance : maintenanceRecords) {
                 maintenanceRepository.delete(maintenance);
                 maintenanceDeleted++;
+                log.debug("  Deleted maintenance task {}", maintenance.getTask_id());
             }
 
             // Delete growth records
@@ -205,6 +277,7 @@ public class FlowerHealthMonitorService {
             for (Growth growth : growthRecords) {
                 growthRepository.delete(growth);
                 growthDeleted++;
+                log.debug("  Deleted growth record {}", growth.getGrowth_id());
             }
 
             log.info("=== Completed cleanup for flower ID: {}. Deleted {} maintenance tasks and {} growth records ===",
@@ -220,7 +293,6 @@ public class FlowerHealthMonitorService {
      * Scheduled cleanup job that runs daily at 2 AM to remove orphaned records
      */
     @Scheduled(cron = "0 0 2 * * *") // Run daily at 2 AM
-    @Transactional
     public void scheduledOrphanedRecordsCleanup() {
         log.info("Running scheduled orphaned records cleanup");
         cleanupOrphanedRecords();
@@ -338,7 +410,7 @@ public class FlowerHealthMonitorService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        // Query growth repository directly instead of using flower.getLatestGrowth()
+        // Query growth repository directly
         Growth currentGrowth = growthRepository.findLatestByFlowerId(flowerId);
 
         if (currentGrowth == null) {
