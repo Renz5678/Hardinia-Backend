@@ -29,7 +29,7 @@ public class MaintenanceReminderService {
      * Scheduled task that runs daily at 8:00 AM
      * Checks for tasks due today and sends email reminders
      */
-    @Scheduled(cron = "0 45 8 * * *") // Runs at 8:00 AM every day
+    @Scheduled(cron = "0 0 6 * * *") // Runs at 8:00 AM every day
     public void sendDailyMaintenanceReminders() {
         logger.info("Starting daily maintenance reminder job");
 

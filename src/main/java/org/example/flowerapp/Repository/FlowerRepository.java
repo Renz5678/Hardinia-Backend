@@ -36,9 +36,18 @@ public class FlowerRepository {
     }
 
     public Flower findByFlowerIdAndUserId(long flowerId, String userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId cannot be null when finding flower " + flowerId);
+        }
+
         String sql = "SELECT * FROM flowerdetails WHERE flower_id = ? AND user_id = ?";
         try {
-            return jdbc.queryForObject(sql, flowerRowMapper(), flowerId, UUID.fromString(userId));
+            return jdbc.queryForObject(
+                    sql,
+                    flowerRowMapper(),
+                    flowerId,
+                    UUID.fromString(userId)
+            );
         } catch (EmptyResultDataAccessException e) {
             throw new FlowerNotFoundException(flowerId);
         }
@@ -112,7 +121,12 @@ public class FlowerRepository {
         String sql = "SELECT * FROM flowerdetails WHERE flower_id = ? AND user_id = ?";
 
         try {
-            Flower flower = jdbc.queryForObject(sql, new Object[]{flowerId, userId}, flowerRowMapper());
+            Flower flower = jdbc.queryForObject(
+                    sql,
+                    flowerRowMapper(),
+                    flowerId,
+                    requireUUID(userId)
+            );
             return Optional.of(flower);
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
@@ -272,5 +286,12 @@ public class FlowerRepository {
 
             return flower;
         };
+    }
+
+    private UUID requireUUID(String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("userId is null or blank");
+        }
+        return UUID.fromString(userId);
     }
 }

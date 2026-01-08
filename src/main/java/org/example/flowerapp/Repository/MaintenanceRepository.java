@@ -227,82 +227,83 @@ public class MaintenanceRepository {
 
     public List<Maintenance> findByCompletedStatusExcludingDead(boolean completed) {
         String sql = """
-        SELECT m.* FROM maintenance m
+        SELECT m.*
+        FROM maintenance m
         WHERE m.completed = ?
-        AND m.flower_id NOT IN (
-            SELECT g.flower_id 
-            FROM growth g
-            WHERE g.recorded_at = (
-                SELECT MAX(g2.recorded_at) 
-                FROM growth g2 
-                WHERE g2.flower_id = g.flower_id
-            )
-            AND g.stage = 'DEAD'
+        AND NOT EXISTS (
+            SELECT 1
+            FROM growthdetails g
+            WHERE g.flower_id = m.flower_id
+              AND g.recorded_at = (
+                  SELECT MAX(g2.recorded_at)
+                  FROM growthdetails g2
+                  WHERE g2.flower_id = g.flower_id
+              )
+              AND g.stage = 'DEAD'
         )
         """;
 
-        try {
-            return jdbc.query(sql, maintenanceRowMapper(), completed);
-        } catch (EmptyResultDataAccessException e) {
-            return new ArrayList<>();
-        }
+        return jdbc.query(sql, maintenanceRowMapper(), completed);
     }
+
 
     /**
      * Find incomplete maintenance tasks for a specific user excluding those for dead flowers
      */
-    public List<Maintenance> findByCompletedStatusAndUserIdExcludingDead(boolean completed, String userId) {
+    public List<Maintenance> findByCompletedStatusAndUserIdExcludingDead(
+            boolean completed, String userId) {
+
         String sql = """
-        SELECT m.* FROM maintenance m
-        WHERE m.completed = ? 
-        AND m.user_id = ?::uuid
-        AND m.flower_id NOT IN (
-            SELECT g.flower_id 
-            FROM growth g
-            WHERE g.recorded_at = (
-                SELECT MAX(g2.recorded_at) 
-                FROM growth g2 
-                WHERE g2.flower_id = g.flower_id
-            )
-            AND g.stage = 'DEAD'
-        )
+        SELECT m.*
+        FROM maintenance m
+        WHERE m.completed = ?
+          AND m.user_id = ?::uuid
+          AND NOT EXISTS (
+              SELECT 1
+              FROM growthdetails g
+              WHERE g.flower_id = m.flower_id
+                AND g.recorded_at = (
+                    SELECT MAX(g2.recorded_at)
+                    FROM growthdetails g2
+                    WHERE g2.flower_id = g.flower_id
+                )
+                AND g.stage = 'DEAD'
+          )
         """;
 
-        try {
-            return jdbc.query(sql, maintenanceRowMapper(), completed, userId);
-        } catch (EmptyResultDataAccessException e) {
-            return new ArrayList<>();
-        }
+        return jdbc.query(sql, maintenanceRowMapper(), completed, userId);
     }
+
 
     /**
      * Find incomplete maintenance tasks for a specific flower excluding dead status
      * (Optional - useful for consistency)
      */
-    public List<Maintenance> findIncompleteByFlowerIdAndUserIdExcludingDead(long flowerId, String userId) {
+    public List<Maintenance> findIncompleteByFlowerIdAndUserIdExcludingDead(
+            long flowerId, String userId) {
+
         String sql = """
-        SELECT m.* FROM maintenance m
-        WHERE m.flower_id = ? 
-        AND m.user_id = ?::uuid 
-        AND m.completed = false
-        AND m.flower_id NOT IN (
-            SELECT g.flower_id 
-            FROM growth g
-            WHERE g.recorded_at = (
-                SELECT MAX(g2.recorded_at) 
-                FROM growth g2 
-                WHERE g2.flower_id = g.flower_id
-            )
-            AND g.stage = 'DEAD'
-        )
+        SELECT m.*
+        FROM maintenance m
+        WHERE m.flower_id = ?
+          AND m.user_id = ?::uuid
+          AND m.completed = false
+          AND NOT EXISTS (
+              SELECT 1
+              FROM growthdetails g
+              WHERE g.flower_id = m.flower_id
+                AND g.recorded_at = (
+                    SELECT MAX(g2.recorded_at)
+                    FROM growthdetails g2
+                    WHERE g2.flower_id = g.flower_id
+                )
+                AND g.stage = 'DEAD'
+          )
         """;
 
-        try {
-            return jdbc.query(sql, maintenanceRowMapper(), flowerId, userId);
-        } catch (EmptyResultDataAccessException e) {
-            return new ArrayList<>();
-        }
+        return jdbc.query(sql, maintenanceRowMapper(), flowerId, userId);
     }
+
 
     private Maintenance insert(Maintenance maintenance) {
         String sql = """
