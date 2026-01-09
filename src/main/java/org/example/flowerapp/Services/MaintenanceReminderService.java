@@ -4,9 +4,12 @@ import org.example.flowerapp.Models.Maintenance;
 import org.example.flowerapp.Repository.MaintenanceRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +18,7 @@ import java.util.stream.Collectors;
 @Service
 public class MaintenanceReminderService {
     private static final Logger logger = LoggerFactory.getLogger(MaintenanceReminderService.class);
+    private static final ZoneId UTC = ZoneId.of("UTC");
 
     private final MaintenanceRepository maintenanceRepository;
     private final EmailService emailService;
@@ -26,90 +30,145 @@ public class MaintenanceReminderService {
     }
 
     /**
-     * Scheduled task that runs daily at 8:00 AM
+     * Scheduled task that runs daily at 6:00 AM UTC (2:00 PM Philippine Time)
      * Checks for tasks due today and sends email reminders
      */
-    @Scheduled(cron = "0 0 6 * * *") // Runs at 8:00 AM every day
+    @Scheduled(cron = "0 0 6 * * *", zone = "UTC")
     public void sendDailyMaintenanceReminders() {
-        logger.info("Starting daily maintenance reminder job");
+        logger.info("=== Starting daily maintenance reminder job ===");
 
         try {
-            // Get all incomplete tasks EXCLUDING dead flowers
-            List<Maintenance> allIncompleteTasks = maintenanceRepository
-                    .findByCompletedStatusExcludingDead(false);
+            processReminders();
+        } catch (Exception e) {
+            logger.error("=== Critical error in daily maintenance reminder job ===", e);
+        }
+    }
 
-            logger.info("Found {} incomplete tasks (excluding dead flowers)", allIncompleteTasks.size());
+    /**
+     * Process reminders in a separate transaction
+     */
+    @Transactional(readOnly = true)
+    protected void processReminders() {
+        ZonedDateTime nowUtc = ZonedDateTime.now(UTC);
+        ZonedDateTime startOfDay = nowUtc.toLocalDate().atStartOfDay(UTC);
+        ZonedDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
 
-            // Filter out any tasks with null userId (defensive programming)
-            List<Maintenance> validTasks = allIncompleteTasks.stream()
-                    .filter(task -> task.getUserId() != null)
-                    .collect(Collectors.toList());
+        logger.info("Current UTC time: {}", nowUtc);
+        logger.info("Checking for tasks due between {} and {}", startOfDay, endOfDay);
 
-            if (validTasks.size() < allIncompleteTasks.size()) {
-                logger.warn("Filtered out {} tasks with null userId",
-                        allIncompleteTasks.size() - validTasks.size());
-            }
+        // Get all incomplete tasks EXCLUDING dead flowers
+        List<Maintenance> allIncompleteTasks = maintenanceRepository
+                .findByCompletedStatusExcludingDead(false);
 
-            // Group tasks by userId
-            Map<String, List<Maintenance>> tasksByUser = validTasks.stream()
-                    .collect(Collectors.groupingBy(Maintenance::getUserId));
+        logger.info("Found {} total incomplete tasks (excluding dead flowers)",
+                allIncompleteTasks.size());
 
-            logger.info("Found {} users with incomplete tasks", tasksByUser.size());
+        // Filter out invalid tasks
+        List<Maintenance> validTasks = allIncompleteTasks.stream()
+                .filter(task -> {
+                    if (task.getUserId() == null) {
+                        logger.warn("Task {} has null userId, skipping", task.getTask_id());
+                        return false;
+                    }
+                    if (task.getDueDate() == null) {
+                        logger.warn("Task {} has null due date, skipping", task.getTask_id());
+                        return false;
+                    }
+                    return true;
+                })
+                .collect(Collectors.toList());
 
-            LocalDateTime now = LocalDateTime.now();
-            LocalDateTime startOfDay = now.withHour(0).withMinute(0).withSecond(0).withNano(0);
-            LocalDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
+        if (validTasks.size() < allIncompleteTasks.size()) {
+            logger.warn("Filtered out {} invalid tasks",
+                    allIncompleteTasks.size() - validTasks.size());
+        }
 
-            int emailsSent = 0;
-            int emailsFailed = 0;
+        // Group tasks by userId
+        Map<String, List<Maintenance>> tasksByUser = validTasks.stream()
+                .collect(Collectors.groupingBy(Maintenance::getUserId));
 
-            // Process each user
-            for (Map.Entry<String, List<Maintenance>> entry : tasksByUser.entrySet()) {
-                String userId = entry.getKey();
+        logger.info("Found {} unique users with incomplete tasks", tasksByUser.size());
 
+        int emailsSent = 0;
+        int emailsFailed = 0;
+        int usersWithTasksDueToday = 0;
+
+        // Process each user independently to prevent cascading failures
+        for (Map.Entry<String, List<Maintenance>> entry : tasksByUser.entrySet()) {
+            String userId = entry.getKey();
+
+            try {
                 // Filter tasks due today for this user
                 List<Maintenance> tasksDueToday = entry.getValue().stream()
-                        .filter(task -> {
-                            LocalDateTime dueDate = task.getDueDate();
-                            return dueDate != null &&
-                                    !dueDate.isBefore(startOfDay) &&
-                                    !dueDate.isAfter(endOfDay);
-                        })
+                        .filter(task -> isTaskDueToday(task, startOfDay, endOfDay))
                         .collect(Collectors.toList());
 
-                // Send email if user has tasks due today
                 if (!tasksDueToday.isEmpty()) {
-                    try {
-                        emailService.sendMaintenanceReminder(userId, tasksDueToday);
-                        logger.info("Sent reminder to user {} for {} tasks", userId, tasksDueToday.size());
-                        emailsSent++;
-                    } catch (Exception e) {
-                        logger.error("Failed to send reminder to user {}", userId, e);
-                        emailsFailed++;
+                    usersWithTasksDueToday++;
+                    logger.info("User {} has {} tasks due today", userId, tasksDueToday.size());
+
+                    // Log task details
+                    for (Maintenance task : tasksDueToday) {
+                        logger.debug("  - Task {}: {} (Due: {})",
+                                task.getTask_id(),
+                                task.getTaskType(),
+                                task.getDueDate());
                     }
+
+                    // Send email
+                    emailService.sendMaintenanceReminder(userId, tasksDueToday);
+                    logger.info("✓ Successfully sent reminder to user {} for {} tasks",
+                            userId, tasksDueToday.size());
+                    emailsSent++;
                 }
+            } catch (Exception e) {
+                // Log error but continue processing other users
+                logger.error("✗ Failed to send reminder to user {}: {}",
+                        userId, e.getMessage());
+                logger.debug("Full error for user {}", userId, e);
+                emailsFailed++;
             }
-
-            logger.info("Daily maintenance reminder job completed. Emails sent: {}, Failed: {}",
-                    emailsSent, emailsFailed);
-
-        } catch (Exception e) {
-            logger.error("Error in daily maintenance reminder job", e);
         }
+
+        logger.info("=== Daily maintenance reminder job completed ===");
+        logger.info("Users with tasks due today: {}", usersWithTasksDueToday);
+        logger.info("Emails sent: {}, Failed: {}", emailsSent, emailsFailed);
+    }
+
+    /**
+     * Check if a task is due today in UTC
+     */
+    private boolean isTaskDueToday(Maintenance task,
+                                   ZonedDateTime startOfDay,
+                                   ZonedDateTime endOfDay) {
+        if (task.getDueDate() == null) {
+            return false;
+        }
+
+        // Convert LocalDateTime to ZonedDateTime assuming UTC
+        ZonedDateTime taskDueDate = task.getDueDate().atZone(UTC);
+
+        return !taskDueDate.isBefore(startOfDay) && !taskDueDate.isAfter(endOfDay);
     }
 
     /**
      * Manual trigger for testing or on-demand reminders for a specific user
      */
+    @Transactional(readOnly = true)
     public void sendRemindersForUser(String userId) {
+        if (userId == null || userId.trim().isEmpty()) {
+            logger.error("Cannot send reminders: userId is null or empty");
+            throw new IllegalArgumentException("User ID is required");
+        }
+
         logger.info("=== Starting sendRemindersForUser for userId: {} ===", userId);
 
         try {
-            LocalDateTime now = LocalDateTime.now();
-            LocalDateTime startOfDay = now.withHour(0).withMinute(0).withSecond(0).withNano(0);
-            LocalDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
+            ZonedDateTime nowUtc = ZonedDateTime.now(UTC);
+            ZonedDateTime startOfDay = nowUtc.toLocalDate().atStartOfDay(UTC);
+            ZonedDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
 
-            logger.info("Current time: {}", now);
+            logger.info("Current UTC time: {}", nowUtc);
             logger.info("Time range: {} to {}", startOfDay, endOfDay);
 
             // Get all incomplete tasks for the user EXCLUDING dead flowers
@@ -119,8 +178,20 @@ public class MaintenanceReminderService {
             logger.info("Found {} incomplete tasks for user (excluding dead flowers)",
                     incompleteTasks.size());
 
-            // Log each task's details
-            for (Maintenance task : incompleteTasks) {
+            // Filter out tasks with null due dates
+            List<Maintenance> validTasks = incompleteTasks.stream()
+                    .filter(task -> {
+                        if (task.getDueDate() == null) {
+                            logger.warn("Task {} has null due date, skipping",
+                                    task.getTask_id());
+                            return false;
+                        }
+                        return true;
+                    })
+                    .collect(Collectors.toList());
+
+            // Log each valid task's details
+            for (Maintenance task : validTasks) {
                 logger.debug("Task ID: {}, Flower: {}, Due Date: {}, Completed: {}",
                         task.getTask_id(),
                         task.getFlower() != null ? task.getFlower().getFlowerName() : "Unknown",
@@ -129,18 +200,11 @@ public class MaintenanceReminderService {
             }
 
             // Filter tasks that are due today
-            List<Maintenance> tasksDueToday = incompleteTasks.stream()
+            List<Maintenance> tasksDueToday = validTasks.stream()
                     .filter(task -> {
-                        LocalDateTime dueDate = task.getDueDate();
-                        boolean isDueToday = dueDate != null &&
-                                !dueDate.isBefore(startOfDay) &&
-                                !dueDate.isAfter(endOfDay);
-
-                        if (dueDate != null) {
-                            logger.debug("Task {} - Due: {}, Is due today: {}",
-                                    task.getTask_id(), dueDate, isDueToday);
-                        }
-
+                        boolean isDueToday = isTaskDueToday(task, startOfDay, endOfDay);
+                        logger.debug("Task {} - Due: {}, Is due today: {}",
+                                task.getTask_id(), task.getDueDate(), isDueToday);
                         return isDueToday;
                     })
                     .collect(Collectors.toList());
@@ -150,55 +214,60 @@ public class MaintenanceReminderService {
             if (!tasksDueToday.isEmpty()) {
                 logger.info("Attempting to send email to userId: {}", userId);
                 emailService.sendMaintenanceReminder(userId, tasksDueToday);
-                logger.info("Email sent successfully to user: {} for {} tasks",
+                logger.info("✓ Email sent successfully to user: {} for {} tasks",
                         userId, tasksDueToday.size());
             } else {
                 logger.info("No tasks due today for user: {}", userId);
             }
 
         } catch (Exception e) {
-            logger.error("Error sending reminder to user: {}", userId, e);
+            logger.error("✗ Error sending reminder to user: {}", userId, e);
+            throw e; // Rethrow for manual triggers
         }
     }
 
     /**
      * Check if a specific user has tasks due today
      */
+    @Transactional(readOnly = true)
     public boolean hasTasksDueToday(String userId) {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime startOfDay = now.withHour(0).withMinute(0).withSecond(0).withNano(0);
-        LocalDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
+        if (userId == null || userId.trim().isEmpty()) {
+            logger.warn("hasTasksDueToday called with null or empty userId");
+            return false;
+        }
+
+        ZonedDateTime nowUtc = ZonedDateTime.now(UTC);
+        ZonedDateTime startOfDay = nowUtc.toLocalDate().atStartOfDay(UTC);
+        ZonedDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
 
         List<Maintenance> incompleteTasks = maintenanceRepository
                 .findByCompletedStatusAndUserIdExcludingDead(false, userId);
 
         return incompleteTasks.stream()
-                .anyMatch(task -> {
-                    LocalDateTime dueDate = task.getDueDate();
-                    return dueDate != null &&
-                            !dueDate.isBefore(startOfDay) &&
-                            !dueDate.isAfter(endOfDay);
-                });
+                .filter(task -> task.getDueDate() != null)
+                .anyMatch(task -> isTaskDueToday(task, startOfDay, endOfDay));
     }
 
     /**
      * Get count of tasks due today for a user
      */
+    @Transactional(readOnly = true)
     public int getTasksDueTodayCount(String userId) {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime startOfDay = now.withHour(0).withMinute(0).withSecond(0).withNano(0);
-        LocalDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
+        if (userId == null || userId.trim().isEmpty()) {
+            logger.warn("getTasksDueTodayCount called with null or empty userId");
+            return 0;
+        }
+
+        ZonedDateTime nowUtc = ZonedDateTime.now(UTC);
+        ZonedDateTime startOfDay = nowUtc.toLocalDate().atStartOfDay(UTC);
+        ZonedDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
 
         List<Maintenance> incompleteTasks = maintenanceRepository
                 .findByCompletedStatusAndUserIdExcludingDead(false, userId);
 
         return (int) incompleteTasks.stream()
-                .filter(task -> {
-                    LocalDateTime dueDate = task.getDueDate();
-                    return dueDate != null &&
-                            !dueDate.isBefore(startOfDay) &&
-                            !dueDate.isAfter(endOfDay);
-                })
+                .filter(task -> task.getDueDate() != null)
+                .filter(task -> isTaskDueToday(task, startOfDay, endOfDay))
                 .count();
     }
 }
