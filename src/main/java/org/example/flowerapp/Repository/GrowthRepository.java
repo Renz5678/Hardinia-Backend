@@ -213,9 +213,12 @@ public class GrowthRepository {
             }
             growth.setUserId(userId);
 
-            // Fetch flower with userId
-            Flower flower = flowerRepository.findByFlowerIdAndUserId(rs.getLong("flower_id"), userId);
-            growth.setFlower(flower);
+            // Only fetch flower if userId is available
+            if (userId != null) {
+                Flower flower = flowerRepository.findByFlowerIdAndUserId(rs.getLong("flower_id"), userId);
+                growth.setFlower(flower);
+            }
+            // else: skip setting flower for system-level queries
 
             String stageStr = rs.getString("stage");
             growth.setStage(stageStr != null ? GrowthStage.fromString(stageStr) : null);
